@@ -1,301 +1,1616 @@
-<div class="app-shell" [style.--page-background]="activeTheme.pageBackground" [style.--canvas-background]="activeTheme.canvasBackground"
-  [style.--panel-background]="activeTheme.panelBackground" [style.--accent]="activeTheme.accent"
-  [style.--text-color]="activeTheme.text" [style.--muted-text]="activeTheme.mutedText"
-  [style.--border-color]="activeTheme.border" [style.--radius]="activeTheme.radius"
-  [style.--heading-font]="activeTheme.headingFont" [style.--body-font]="activeTheme.bodyFont">
+<div
+  class="app-shell"
+  [attr.data-app-theme]="resolvedAppTheme"
+  [style.--page-background]="activeTheme.pageBackground"
+  [style.--surface-background]="activeTheme.surfaceBackground"
+  [style.--panel-background]="activeTheme.panelBackground"
+  [style.--section-background]="activeTheme.sectionBackground"
+  [style.--section-text]="activeTheme.sectionText"
+  [style.--primary]="activeTheme.primary"
+  [style.--primary-text]="activeTheme.primaryText"
+  [style.--text-color]="activeTheme.text"
+  [style.--muted-text]="activeTheme.mutedText"
+  [style.--label-text]="activeTheme.labelText"
+  [style.--border-color]="activeTheme.border"
+  [style.--input-background]="activeTheme.inputBackground"
+  [style.--input-text]="activeTheme.inputText"
+  [style.--focus-color]="activeTheme.focus"
+  [style.--required-color]="activeTheme.required"
+  [style.--error-color]="activeTheme.error"
+  [style.--note-background]="activeTheme.noteBackground"
+  [style.--note-border]="activeTheme.noteBorder"
+  [style.--link-color]="activeTheme.link"
+  [style.--radius]="activeTheme.radius"
+  [style.--heading-font]="activeTheme.headingFont"
+  [style.--body-font]="activeTheme.bodyFont"
+>
   <header class="hero">
-    <div>
-      <p class="eyebrow">Angular 17 JSON To PDF Template Studio</p>
-      <h1>Design ADA-minded Thymeleaf PDF templates from JSON.</h1>
+    <div class="hero-copy">
+      <p class="eyebrow">Angular 17 Page-Aware Thymeleaf Builder</p>
+      <h1>Compose accessible A4 forms with real page structure.</h1>
       <p class="subtitle">
-        Upload or paste JSON, drag fields into a layout, preview the result, and save reusable themes and templates.
+        Build modern browser-printable Thymeleaf forms with per-page headers and footers, mixed field alignment, manual
+        page breaks, and a visual A4 preview.
       </p>
     </div>
 
-    <div class="view-switch" role="tablist" aria-label="Workspace view mode">
-      <button type="button" class="view-button" [class.active]="viewMode === 'design'" (click)="setViewMode('design')">
-        Design
-      </button>
-      <button type="button" class="view-button" [class.active]="viewMode === 'html'" (click)="setViewMode('html')">
-        Generate HTML
-      </button>
-      <button type="button" class="view-button" [class.active]="viewMode === 'split'" (click)="setViewMode('split')">
-        Side By Side
-      </button>
+    <div class="hero-actions">
+      <div class="hero-primary-actions">
+        <button type="button" class="primary-button" (click)="openPreviewFocus()">Open Preview Studio</button>
+        <button type="button" class="secondary-button" (click)="downloadThymeleafHtml()">Download HTML</button>
+      </div>
+
+      <div class="hero-controls">
+        <div class="control-group">
+          <span class="control-group-label">App Theme</span>
+          <div class="view-switch compact-switch" role="group" aria-label="Application theme">
+            @for (mode of appThemeModes; track mode.value) {
+              <button
+                type="button"
+                class="view-button compact-button"
+                [class.active]="appThemeMode === mode.value"
+                (click)="setAppThemeMode(mode.value)"
+              >
+                {{ mode.label }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="control-group">
+          <span class="control-group-label">Utility Panel</span>
+          <div class="view-switch compact-switch" role="tablist" aria-label="Workspace side panel">
+            @for (tab of sidePanelTabs; track tab.value) {
+              <button
+                type="button"
+                class="view-button compact-button"
+                [class.active]="sidePanelTab === tab.value"
+                (click)="setSidePanelTab(tab.value)"
+              >
+                {{ tab.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-summary">
+        <div class="summary-card">
+          <strong>{{ pagePlan.length }}</strong>
+          <span>pages</span>
+        </div>
+        <div class="summary-card">
+          <strong>{{ blocks.length }}</strong>
+          <span>blocks</span>
+        </div>
+        <div class="summary-card">
+          <strong>{{ jsonFields.length }}</strong>
+          <span>json fields</span>
+        </div>
+      </div>
     </div>
   </header>
 
-  <section class="top-grid" aria-label="JSON and theme controls">
-    <article class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>JSON Source</h2>
-          <p>Paste JSON or import a file to generate draggable fields.</p>
-        </div>
-
-        <label class="upload-button">
-          <input type="file" accept=".json,application/json" (change)="onFileSelected($event)" />
-          Upload JSON
-        </label>
-      </div>
-
-      <label class="field-label" for="template-name">Template name</label>
-      <input id="template-name" type="text" [(ngModel)]="templateName" />
-
-      <label class="field-label" for="json-input">JSON content</label>
-      <textarea id="json-input" rows="12" [(ngModel)]="jsonInput" spellcheck="false"></textarea>
-
-      <div class="action-row">
-        <button type="button" class="primary-button" (click)="parseJsonInput()">Load JSON</button>
-        <button type="button" class="secondary-button" (click)="resetWorkspace()">Reset sample</button>
-        <button type="button" class="secondary-button" (click)="saveTemplate()">Save template</button>
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>Theme Library</h2>
-          <p>Create an accessible theme once and reuse it across templates.</p>
-        </div>
-
-        <select aria-label="Apply saved theme" [ngModel]="selectedThemeId" (ngModelChange)="applyTheme($event)">
-          @for (theme of themes; track theme.id) {
-            <option [value]="theme.id">{{ theme.name }}</option>
-          }
-        </select>
-      </div>
-
-      <div class="theme-grid">
-        <label>
-          <span class="field-label">Theme name</span>
-          <input type="text" [(ngModel)]="themeDraft.name" />
-        </label>
-        <label>
-          <span class="field-label">Accent</span>
-          <input type="color" [(ngModel)]="themeDraft.accent" />
-        </label>
-        <label>
-          <span class="field-label">Page background</span>
-          <input type="color" [(ngModel)]="themeDraft.pageBackground" />
-        </label>
-        <label>
-          <span class="field-label">Canvas background</span>
-          <input type="color" [(ngModel)]="themeDraft.canvasBackground" />
-        </label>
-        <label>
-          <span class="field-label">Panel background</span>
-          <input type="color" [(ngModel)]="themeDraft.panelBackground" />
-        </label>
-        <label>
-          <span class="field-label">Text</span>
-          <input type="color" [(ngModel)]="themeDraft.text" />
-        </label>
-        <label>
-          <span class="field-label">Muted text</span>
-          <input type="color" [(ngModel)]="themeDraft.mutedText" />
-        </label>
-        <label>
-          <span class="field-label">Border</span>
-          <input type="color" [(ngModel)]="themeDraft.border" />
-        </label>
-        <label>
-          <span class="field-label">Heading font</span>
-          <select [(ngModel)]="themeDraft.headingFont">
-            @for (font of fontChoices; track font) {
-              <option [value]="font">{{ font }}</option>
-            }
-          </select>
-        </label>
-        <label>
-          <span class="field-label">Body font</span>
-          <select [(ngModel)]="themeDraft.bodyFont">
-            @for (font of fontChoices; track font) {
-              <option [value]="font">{{ font }}</option>
-            }
-          </select>
-        </label>
-      </div>
-
-      <div class="action-row">
-        <button type="button" class="primary-button" (click)="saveTheme()">Save theme</button>
-      </div>
-    </article>
-  </section>
-
-  <section class="top-grid" aria-label="Template assets">
-    <article class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>Fields</h2>
-          <p>Drag properties into the design surface to build your template.</p>
-        </div>
-
-        <div class="action-row compact">
-          <button type="button" class="secondary-button" (click)="addHeading()">Add heading</button>
-          <button type="button" class="secondary-button" (click)="addDivider()">Add divider</button>
-        </div>
-      </div>
-
-      <div class="field-palette" aria-label="Draggable JSON properties">
-        @for (field of jsonFields; track field.key) {
-          <button
-            type="button"
-            class="palette-card"
-            draggable="true"
-            (dragstart)="startFieldDrag(field.key)"
-            (dragend)="clearDrag()"
-            [attr.aria-label]="'Drag field ' + field.label"
-          >
-            <strong>{{ field.label }}</strong>
-            <span>{{ field.preview }}</span>
-            <small>{{ field.type }}</small>
-          </button>
-        }
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>Saved Templates</h2>
-          <p>Reuse the same theme on multiple template layouts.</p>
-        </div>
-      </div>
-
-      <div class="saved-template-list">
-        @if (savedTemplates.length) {
-          @for (template of savedTemplates; track template.id) {
-            <button type="button" class="saved-template-card" (click)="loadTemplate(template.id)">
-              <strong>{{ template.name }}</strong>
-              <span>{{ template.updatedAt | date:'medium' }}</span>
+  <section class="settings-tabbar" aria-label="Workspace settings tabs">
+    <div class="settings-overview">
+      <div class="settings-overview-copy">
+        <div class="view-switch settings-switch" role="tablist" aria-label="Workspace settings">
+          @for (tab of settingsTabs; track tab.value) {
+            <button
+              type="button"
+              class="view-button settings-button"
+              [class.active]="settingsTab === tab.value"
+              (click)="setSettingsTab(tab.value)"
+            >
+              {{ tab.label }}
             </button>
           }
-        } @else {
-          <p class="empty-state">Save a layout to build your reusable template library.</p>
-        }
+        </div>
+        <p class="settings-description">{{ activeSettingsTabDescription }}</p>
       </div>
-    </article>
+
+      <div class="settings-overview-actions">
+        <span class="mini-tag">{{ templateName }}</span>
+        <span class="mini-tag">{{ layoutMode === 'two-column' ? 'Two-column layout' : 'Single-column layout' }}</span>
+        <span class="mini-tag">{{ jsonFields.length }} fields</span>
+        <button type="button" class="secondary-button" (click)="settingsExpanded ? collapseSettingsPanel() : setSettingsTab(settingsTab)">
+          {{ settingsExpanded ? 'Hide setup' : 'Open setup' }}
+        </button>
+      </div>
+    </div>
+
+    @if (!settingsExpanded) {
+      <p class="collapsed-helper">Setup panels are hidden so the builder stays focused. Choose a tab above whenever you need JSON, layout, theme, or library settings.</p>
+    }
   </section>
+
+  @if (settingsExpanded && settingsTab === 'data') {
+    <section class="settings-single" aria-label="Data setup">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>JSON Source</h2>
+            <p>Load flat JSON, name the template, and keep the source data close while you design.</p>
+          </div>
+
+          <label class="upload-button">
+            <input type="file" accept=".json,application/json" (change)="onJsonFileSelected($event)" />
+            Upload JSON
+          </label>
+        </div>
+
+        <div class="form-grid two-up compact-grid">
+          <label>
+            <span class="field-label">Template name</span>
+            <input id="template-name" type="text" [(ngModel)]="templateName" />
+          </label>
+
+          <label>
+            <span class="field-label">Layout mode</span>
+            <select [(ngModel)]="layoutMode" aria-label="Generated layout mode">
+              @for (option of layoutOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <label>
+          <span class="field-label">JSON content</span>
+          <textarea rows="11" [(ngModel)]="jsonInput" spellcheck="false"></textarea>
+        </label>
+
+        <div class="action-row">
+          <button type="button" class="primary-button" (click)="parseJsonInput()">Load JSON</button>
+          <button type="button" class="secondary-button" (click)="resetWorkspace()">Reset sample</button>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (settingsExpanded && settingsTab === 'layout') {
+    <section class="setup-grid" aria-label="Document layout settings">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Document Studio</h2>
+            <p>Control A4 behavior, auto-pagination, and the default alignment that fields inherit.</p>
+          </div>
+        </div>
+
+        <section class="subpanel">
+          <div class="subsection-header">
+            <h3>Global Field Alignment</h3>
+            <span>Fields can override these individually later</span>
+          </div>
+
+          <div class="pill-switch" role="group" aria-label="Default field layout">
+            @for (option of resolvedFieldAlignmentOptions; track option.value) {
+              <button
+                type="button"
+                class="pill-button"
+                [class.active]="formLayout.defaultFieldLayout === option.value"
+                (click)="formLayout.defaultFieldLayout = option.value"
+              >
+                {{ option.label }}
+              </button>
+            }
+          </div>
+
+          <div class="form-grid two-up compact-grid">
+            <label>
+              <span class="field-label">Default label alignment</span>
+              <select [(ngModel)]="formLayout.defaultLabelAlign">
+                @for (option of resolvedLabelAlignOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span class="field-label">Default vertical alignment</span>
+              <select [(ngModel)]="formLayout.defaultVerticalAlign">
+                @for (option of resolvedVerticalAlignOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="full-span">
+              <span class="field-label">Default label width</span>
+              <div class="range-control">
+                <input type="range" min="20" max="48" step="1" [ngModel]="formLayout.defaultLabelWidth" (ngModelChange)="formLayout.defaultLabelWidth = +$event" />
+                <strong>{{ formLayout.defaultLabelWidth }}%</strong>
+              </div>
+            </label>
+
+            <label class="full-span">
+              <span class="field-label">Row gap</span>
+              <input type="text" [(ngModel)]="formLayout.rowGap" />
+            </label>
+          </div>
+        </section>
+
+        <section class="subpanel">
+          <div class="subsection-header">
+            <h3>A4 Page Settings</h3>
+            <span>Used for preview and browser print export</span>
+          </div>
+
+          <div class="form-grid two-up compact-grid">
+            <label>
+              <span class="field-label">Page size</span>
+              <input type="text" [ngModel]="pageSettings.size" readonly />
+            </label>
+
+            <label>
+              <span class="field-label">Orientation</span>
+              <select [(ngModel)]="pageSettings.orientation">
+                @for (option of pageOrientationOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span class="field-label">Top margin</span>
+              <input type="text" [(ngModel)]="pageSettings.marginTop" />
+            </label>
+
+            <label>
+              <span class="field-label">Right margin</span>
+              <input type="text" [(ngModel)]="pageSettings.marginRight" />
+            </label>
+
+            <label>
+              <span class="field-label">Bottom margin</span>
+              <input type="text" [(ngModel)]="pageSettings.marginBottom" />
+            </label>
+
+            <label>
+              <span class="field-label">Left margin</span>
+              <input type="text" [(ngModel)]="pageSettings.marginLeft" />
+            </label>
+
+            <label>
+              <span class="field-label">Header height</span>
+              <input type="text" [(ngModel)]="pageSettings.headerHeight" />
+            </label>
+
+            <label>
+              <span class="field-label">Footer height</span>
+              <input type="text" [(ngModel)]="pageSettings.footerHeight" />
+            </label>
+
+            <label class="full-span">
+              <span class="field-label">Page divider gap</span>
+              <input type="text" [(ngModel)]="pageSettings.pageGap" />
+            </label>
+          </div>
+
+          <label class="checkbox">
+            <input type="checkbox" [(ngModel)]="pageSettings.autoPaginate" />
+            <span>Automatically estimate page overflow and distribute blocks across pages</span>
+          </label>
+        </section>
+
+        <section class="subpanel">
+          <div class="subsection-header">
+            <h3>Default Header And Footer</h3>
+            <span>Per-page overrides can replace these later</span>
+          </div>
+
+          <details class="config-accordion" open>
+            <summary>Default header</summary>
+            <div class="accordion-body">
+              <label class="checkbox">
+                <input type="checkbox" [(ngModel)]="pageSettings.defaultHeader.enabled" />
+                <span>Show default header on pages</span>
+              </label>
+
+              <div class="form-grid two-up compact-grid">
+                <label>
+                  <span class="field-label">Eyebrow</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultHeader.eyebrow" />
+                </label>
+
+                <label>
+                  <span class="field-label">Logo URL</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultHeader.logoUrl" />
+                </label>
+
+                <label class="full-span">
+                  <span class="field-label">Title</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultHeader.title" />
+                </label>
+
+                <label class="full-span">
+                  <span class="field-label">Body</span>
+                  <textarea rows="3" [(ngModel)]="pageSettings.defaultHeader.body"></textarea>
+                </label>
+
+                <label class="full-span">
+                  <span class="field-label">Meta text</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultHeader.metaText" />
+                </label>
+
+                <label>
+                  <span class="field-label">Alignment</span>
+                  <select [(ngModel)]="pageSettings.defaultHeader.align">
+                    @for (option of pageRegionAlignOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+
+                <div class="checkbox-stack">
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="pageSettings.defaultHeader.showPageNumber" />
+                    <span>Show page number</span>
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="pageSettings.defaultHeader.showDate" />
+                    <span>Show date</span>
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="pageSettings.defaultHeader.divider" />
+                    <span>Show divider</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <details class="config-accordion">
+            <summary>Default footer</summary>
+            <div class="accordion-body">
+              <label class="checkbox">
+                <input type="checkbox" [(ngModel)]="pageSettings.defaultFooter.enabled" />
+                <span>Show default footer on pages</span>
+              </label>
+
+              <div class="form-grid two-up compact-grid">
+                <label>
+                  <span class="field-label">Eyebrow</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultFooter.eyebrow" />
+                </label>
+
+                <label>
+                  <span class="field-label">Logo URL</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultFooter.logoUrl" />
+                </label>
+
+                <label class="full-span">
+                  <span class="field-label">Title</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultFooter.title" />
+                </label>
+
+                <label class="full-span">
+                  <span class="field-label">Body</span>
+                  <textarea rows="3" [(ngModel)]="pageSettings.defaultFooter.body"></textarea>
+                </label>
+
+                <label class="full-span">
+                  <span class="field-label">Meta text</span>
+                  <input type="text" [(ngModel)]="pageSettings.defaultFooter.metaText" />
+                </label>
+
+                <label>
+                  <span class="field-label">Alignment</span>
+                  <select [(ngModel)]="pageSettings.defaultFooter.align">
+                    @for (option of pageRegionAlignOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+
+                <div class="checkbox-stack">
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="pageSettings.defaultFooter.showPageNumber" />
+                    <span>Show page number</span>
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="pageSettings.defaultFooter.showDate" />
+                    <span>Show date</span>
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="pageSettings.defaultFooter.divider" />
+                    <span>Show divider</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </details>
+        </section>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Page Navigator</h2>
+            <p>Review which blocks fall on each page and optionally override the default header or footer.</p>
+          </div>
+        </div>
+
+        <div class="page-pills" role="tablist" aria-label="Preview pages">
+          @for (page of pagePlan; track page.pageNumber) {
+            <button
+              type="button"
+              class="page-pill"
+              [class.active]="selectedPreviewPage?.pageNumber === page.pageNumber"
+              (click)="selectPreviewPage(page.pageNumber)"
+            >
+              <strong>Page {{ page.pageNumber }}</strong>
+              <span>{{ page.blocks.length }} blocks</span>
+            </button>
+          }
+        </div>
+
+        @if (selectedPreviewPage; as page) {
+          <div class="page-summary-card">
+            <div class="page-summary-top">
+              <strong>Selected page {{ page.pageNumber }}</strong>
+              <span>{{ page.estimatedUsage | number:'1.0-1' }} / {{ page.estimatedCapacity | number:'1.0-1' }} estimated units</span>
+            </div>
+
+            <div class="page-block-list">
+              @for (block of page.blocks; track block.id) {
+                <span class="mini-tag">{{ getCanvasTitle(block) }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="subpanel">
+            <div class="subsection-header">
+              <h3>Per-Page Overrides</h3>
+              <span>Optional overrides for page {{ page.pageNumber }}</span>
+            </div>
+
+            <div class="checkbox-stack">
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  [ngModel]="hasPageHeaderOverride(page.pageNumber)"
+                  (ngModelChange)="togglePageHeaderOverride(page.pageNumber, $event)"
+                />
+                <span>Use a custom header on this page</span>
+              </label>
+
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  [ngModel]="hasPageFooterOverride(page.pageNumber)"
+                  (ngModelChange)="togglePageFooterOverride(page.pageNumber, $event)"
+                />
+                <span>Use a custom footer on this page</span>
+              </label>
+            </div>
+
+            @if (selectedPageOverride; as pageOverride) {
+              @if (pageOverride.useCustomHeader) {
+                <details class="config-accordion" open>
+                  <summary>Custom header for page {{ page.pageNumber }}</summary>
+                  <div class="accordion-body">
+                    <div class="form-grid two-up compact-grid">
+                      <label>
+                        <span class="field-label">Eyebrow</span>
+                        <input type="text" [(ngModel)]="pageOverride.header.eyebrow" />
+                      </label>
+
+                      <label>
+                        <span class="field-label">Logo URL</span>
+                        <input type="text" [(ngModel)]="pageOverride.header.logoUrl" />
+                      </label>
+
+                      <label class="full-span">
+                        <span class="field-label">Title</span>
+                        <input type="text" [(ngModel)]="pageOverride.header.title" />
+                      </label>
+
+                      <label class="full-span">
+                        <span class="field-label">Body</span>
+                        <textarea rows="3" [(ngModel)]="pageOverride.header.body"></textarea>
+                      </label>
+
+                      <label class="full-span">
+                        <span class="field-label">Meta text</span>
+                        <input type="text" [(ngModel)]="pageOverride.header.metaText" />
+                      </label>
+
+                      <label>
+                        <span class="field-label">Alignment</span>
+                        <select [(ngModel)]="pageOverride.header.align">
+                          @for (option of pageRegionAlignOptions; track option.value) {
+                            <option [value]="option.value">{{ option.label }}</option>
+                          }
+                        </select>
+                      </label>
+
+                      <div class="checkbox-stack">
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.header.enabled" />
+                          <span>Show header</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.header.showPageNumber" />
+                          <span>Show page number</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.header.showDate" />
+                          <span>Show date</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.header.divider" />
+                          <span>Show divider</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              }
+
+              @if (pageOverride.useCustomFooter) {
+                <details class="config-accordion" open>
+                  <summary>Custom footer for page {{ page.pageNumber }}</summary>
+                  <div class="accordion-body">
+                    <div class="form-grid two-up compact-grid">
+                      <label>
+                        <span class="field-label">Eyebrow</span>
+                        <input type="text" [(ngModel)]="pageOverride.footer.eyebrow" />
+                      </label>
+
+                      <label>
+                        <span class="field-label">Logo URL</span>
+                        <input type="text" [(ngModel)]="pageOverride.footer.logoUrl" />
+                      </label>
+
+                      <label class="full-span">
+                        <span class="field-label">Title</span>
+                        <input type="text" [(ngModel)]="pageOverride.footer.title" />
+                      </label>
+
+                      <label class="full-span">
+                        <span class="field-label">Body</span>
+                        <textarea rows="3" [(ngModel)]="pageOverride.footer.body"></textarea>
+                      </label>
+
+                      <label class="full-span">
+                        <span class="field-label">Meta text</span>
+                        <input type="text" [(ngModel)]="pageOverride.footer.metaText" />
+                      </label>
+
+                      <label>
+                        <span class="field-label">Alignment</span>
+                        <select [(ngModel)]="pageOverride.footer.align">
+                          @for (option of pageRegionAlignOptions; track option.value) {
+                            <option [value]="option.value">{{ option.label }}</option>
+                          }
+                        </select>
+                      </label>
+
+                      <div class="checkbox-stack">
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.footer.enabled" />
+                          <span>Show footer</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.footer.showPageNumber" />
+                          <span>Show page number</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.footer.showDate" />
+                          <span>Show date</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="pageOverride.footer.divider" />
+                          <span>Show divider</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              }
+            }
+          </div>
+        }
+      </article>
+    </section>
+  }
+
+  @if (settingsExpanded && settingsTab === 'theme') {
+    <section class="settings-single" aria-label="Theme settings">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Theme Studio</h2>
+            <p>Modernize the generated form with manual color and typography controls.</p>
+          </div>
+
+          <select [ngModel]="selectedThemeId" (ngModelChange)="applyTheme($event)" aria-label="Apply saved theme">
+            @for (theme of themes; track theme.id) {
+              <option [value]="theme.id">{{ theme.name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="theme-grid compact-grid">
+          <label>
+            <span class="field-label">Theme name</span>
+            <input type="text" [(ngModel)]="themeDraft.name" />
+          </label>
+
+          <label>
+            <span class="field-label">Radius</span>
+            <input type="text" [(ngModel)]="themeDraft.radius" />
+          </label>
+
+          <label>
+            <span class="field-label">Page background</span>
+            <input type="color" [(ngModel)]="themeDraft.pageBackground" />
+          </label>
+
+          <label>
+            <span class="field-label">Surface background</span>
+            <input type="color" [(ngModel)]="themeDraft.surfaceBackground" />
+          </label>
+
+          <label>
+            <span class="field-label">Panel background</span>
+            <input type="color" [(ngModel)]="themeDraft.panelBackground" />
+          </label>
+
+          <label>
+            <span class="field-label">Section background</span>
+            <input type="color" [(ngModel)]="themeDraft.sectionBackground" />
+          </label>
+
+          <label>
+            <span class="field-label">Section text</span>
+            <input type="color" [(ngModel)]="themeDraft.sectionText" />
+          </label>
+
+          <label>
+            <span class="field-label">Primary</span>
+            <input type="color" [(ngModel)]="themeDraft.primary" />
+          </label>
+
+          <label>
+            <span class="field-label">Primary text</span>
+            <input type="color" [(ngModel)]="themeDraft.primaryText" />
+          </label>
+
+          <label>
+            <span class="field-label">Text</span>
+            <input type="color" [(ngModel)]="themeDraft.text" />
+          </label>
+
+          <label>
+            <span class="field-label">Muted text</span>
+            <input type="color" [(ngModel)]="themeDraft.mutedText" />
+          </label>
+
+          <label>
+            <span class="field-label">Label text</span>
+            <input type="color" [(ngModel)]="themeDraft.labelText" />
+          </label>
+
+          <label>
+            <span class="field-label">Border</span>
+            <input type="color" [(ngModel)]="themeDraft.border" />
+          </label>
+
+          <label>
+            <span class="field-label">Input background</span>
+            <input type="color" [(ngModel)]="themeDraft.inputBackground" />
+          </label>
+
+          <label>
+            <span class="field-label">Input text</span>
+            <input type="color" [(ngModel)]="themeDraft.inputText" />
+          </label>
+
+          <label>
+            <span class="field-label">Focus</span>
+            <input type="color" [(ngModel)]="themeDraft.focus" />
+          </label>
+
+          <label>
+            <span class="field-label">Required</span>
+            <input type="color" [(ngModel)]="themeDraft.required" />
+          </label>
+
+          <label>
+            <span class="field-label">Error</span>
+            <input type="color" [(ngModel)]="themeDraft.error" />
+          </label>
+
+          <label>
+            <span class="field-label">Note background</span>
+            <input type="color" [(ngModel)]="themeDraft.noteBackground" />
+          </label>
+
+          <label>
+            <span class="field-label">Note border</span>
+            <input type="color" [(ngModel)]="themeDraft.noteBorder" />
+          </label>
+
+          <label>
+            <span class="field-label">Link</span>
+            <input type="color" [(ngModel)]="themeDraft.link" />
+          </label>
+
+          <label>
+            <span class="field-label">Heading font</span>
+            <select [(ngModel)]="themeDraft.headingFont">
+              @for (font of fontChoices; track font) {
+                <option [value]="font">{{ font }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span class="field-label">Body font</span>
+            <select [(ngModel)]="themeDraft.bodyFont">
+              @for (font of fontChoices; track font) {
+                <option [value]="font">{{ font }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="action-row">
+          <button type="button" class="primary-button" (click)="saveTheme()">Save theme</button>
+          <button type="button" class="secondary-button" (click)="exportActiveTheme()">Export theme JSON</button>
+          <label class="upload-button">
+            <input type="file" accept=".json,application/json" (change)="onThemeImportSelected($event)" />
+            Import theme JSON
+          </label>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (settingsExpanded && settingsTab === 'library') {
+    <section class="settings-single" aria-label="Template library">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Save And Export</h2>
+            <p>Persist templates locally, exchange configs as JSON, and download the final Thymeleaf HTML.</p>
+          </div>
+        </div>
+
+        <div class="form-grid two-up compact-grid">
+          <button type="button" class="primary-button" (click)="saveTemplate()">Save template</button>
+          <button type="button" class="secondary-button" (click)="exportCurrentTemplate()">Export template JSON</button>
+          <label class="upload-button">
+            <input type="file" accept=".json,application/json" (change)="onTemplateImportSelected($event)" />
+            Import template JSON
+          </label>
+          <button type="button" class="secondary-button" (click)="downloadThymeleafHtml()">Download Thymeleaf HTML</button>
+        </div>
+
+        <div class="saved-template-list">
+          @if (savedTemplates.length) {
+            @for (template of savedTemplates; track template.id) {
+              <button type="button" class="saved-template-card" (click)="loadTemplate(template.id)">
+                <strong>{{ template.name }}</strong>
+                <span>{{ template.updatedAt | date:'medium' }}</span>
+              </button>
+            }
+          } @else {
+            <p class="empty-state">Saved templates will appear here once you store the first configuration.</p>
+          }
+        </div>
+      </article>
+    </section>
+  }
 
   <p class="status" role="status" aria-live="polite">{{ statusMessage }}</p>
 
-  <section class="workspace" [class.design-only]="viewMode === 'design'" [class.html-only]="viewMode === 'html'">
-    @if (viewMode !== 'html') {
-      <article class="panel workspace-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Design Workspace</h2>
-            <p>Drag, reorder, and refine the cards while keeping the preview visible beside the editor.</p>
-          </div>
+  <section class="builder-grid" aria-label="Designer workspace">
+    <article class="panel palette-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Palette</h2>
+          <p>{{ activePaletteTabDescription }}</p>
         </div>
+      </div>
 
-        <div class="design-preview-layout">
-          <section class="design-surface-panel" aria-label="Design surface editor">
-            <div class="drop-slot" (dragover)="allowDrop($event)" (drop)="dropAt(0)"></div>
+      <div class="panel-tabs panel-tabs-3 palette-tab-switch" role="tablist" aria-label="Palette sections">
+        @for (tab of paletteTabs; track tab.value) {
+          <button
+            type="button"
+            class="panel-tab"
+            [class.active]="paletteTab === tab.value"
+            (click)="setPaletteTab(tab.value)"
+          >
+            {{ tab.label }}
+          </button>
+        }
+      </div>
 
-            <div class="canvas">
-              @for (block of blocks; track block.id; let i = $index) {
-                <div class="canvas-block">
-                  <article
-                    class="design-card"
-                    [class.full]="block.width === 'full'"
-                    draggable="true"
-                    (dragstart)="startBlockDrag(block.id)"
-                    (dragend)="clearDrag()"
-                  >
-                    <div class="design-card-header">
-                      <div class="design-card-title">
-                        <strong>{{ block.label }}</strong>
-                        @if (getFieldForBlock(block); as field) {
-                          <span class="source-key">{{ field.key }}</span>
-                        }
-                      </div>
-                      <div class="action-row compact">
-                        <button type="button" class="icon-button" (click)="moveBlock(block.id, -1)" aria-label="Move block up">↑</button>
-                        <button type="button" class="icon-button" (click)="moveBlock(block.id, 1)" aria-label="Move block down">↓</button>
-                        <button type="button" class="icon-button" (click)="removeBlock(block.id)" aria-label="Remove block">✕</button>
-                      </div>
+      <div class="panel-scroll palette-scroll">
+        @if (paletteTab === 'fields') {
+          <section class="palette-column" aria-labelledby="json-fields-heading">
+            <div class="subsection-header compact-subsection-header">
+              <h3 id="json-fields-heading">JSON Fields</h3>
+              <span>{{ jsonFields.length }} available</span>
+            </div>
+
+            @if (jsonFields.length) {
+              <div class="palette-compact-list">
+                @for (field of jsonFields; track field.key) {
+                  <article class="palette-row" draggable="true" (dragstart)="startJsonFieldDrag(field.key)" (dragend)="clearDrag()">
+                    <div class="palette-row-copy">
+                      <strong>{{ field.label }}</strong>
+                      <span>{{ field.key }}</span>
+                      <small>{{ field.type }} • {{ field.preview }}</small>
                     </div>
 
-                    @if (block.kind === 'field') {
-                      <div class="card-controls">
-                        <label>
-                          <span class="field-label">HTML label</span>
-                          <input type="text" [(ngModel)]="block.label" />
-                        </label>
-                        <label>
-                          <span class="field-label">Control</span>
-                          <select [(ngModel)]="block.controlType">
-                            @for (controlType of controlTypes; track controlType) {
-                              <option [value]="controlType">{{ controlType }}</option>
-                            }
-                          </select>
-                        </label>
-                        <label>
-                          <span class="field-label">Width</span>
-                          <select [(ngModel)]="block.width">
-                            <option value="half">Half</option>
-                            <option value="full">Full</option>
-                          </select>
-                        </label>
-                        <label>
-                          <span class="field-label">Emphasis</span>
-                          <select [(ngModel)]="block.emphasis">
-                            <option value="default">Default</option>
-                            <option value="strong">Strong</option>
-                          </select>
-                        </label>
-                        @if (usesChoiceOptions(block)) {
-                          <label class="full-span">
-                            <span class="field-label">Options</span>
-                            <input type="text" [(ngModel)]="block.optionsText" placeholder="user, admin, guest" />
-                          </label>
-                        }
-                        <label class="checkbox">
-                          <input type="checkbox" [(ngModel)]="block.visibleLabel" />
-                          <span>Show label</span>
-                        </label>
-                        <label class="checkbox">
-                          <input type="checkbox" [(ngModel)]="block.required" />
-                          <span>Mandatory mark</span>
-                        </label>
-                      </div>
-                    } @else if (block.kind === 'heading') {
-                      <label>
-                        <span class="field-label">Heading text</span>
-                        <input type="text" [(ngModel)]="block.label" />
-                      </label>
-                    } @else {
-                      <p class="hint-text">Divider adds spacing and a visual separator in the generated PDF template.</p>
-                    }
+                    <button type="button" class="icon-button compact-add-button" (click)="addJsonField(field.key)" [attr.aria-label]="'Add ' + field.label">
+                      +
+                    </button>
                   </article>
+                }
+              </div>
+            } @else {
+              <p class="empty-state">Load flat JSON to generate field rows here.</p>
+            }
+          </section>
+        }
 
-                  <div class="drop-slot" (dragover)="allowDrop($event)" (drop)="dropAt(i + 1)"></div>
-                </div>
+        @if (paletteTab === 'blocks') {
+          <section class="palette-column manual-column" aria-labelledby="manual-blocks-heading">
+            <div class="subsection-header compact-subsection-header">
+              <h3 id="manual-blocks-heading">Manual Blocks</h3>
+              <span>{{ manualBlocks.length }} types</span>
+            </div>
+
+            <div class="manual-block-grid">
+              @for (item of manualBlocks; track item.kind) {
+                <article class="manual-block-tile" draggable="true" (dragstart)="startPaletteItemDrag(item.kind)" (dragend)="clearDrag()">
+                  <div class="manual-block-copy">
+                    <strong>{{ item.title }}</strong>
+                    <small>{{ item.description }}</small>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="icon-button compact-add-button"
+                    (click)="addManualBlock(item.kind)"
+                    [attr.aria-label]="'Add ' + item.title"
+                  >
+                    +
+                  </button>
+                </article>
               }
             </div>
           </section>
+        }
 
-          <aside class="preview-frame-shell" aria-label="Live preview">
-            <h3>Live preview</h3>
-            <iframe title="Live template preview" [attr.srcdoc]="previewDocument"></iframe>
-          </aside>
+        @if (paletteTab === 'pages') {
+          <section class="palette-column" aria-labelledby="pages-heading">
+            <div class="subsection-header compact-subsection-header">
+              <h3 id="pages-heading">Pages</h3>
+              <span>{{ pagePlan.length }} in document</span>
+            </div>
+
+            <div class="action-row compact page-toolbar">
+              <button type="button" class="secondary-button" (click)="addManualBlock('page-break')">Insert page break</button>
+              <button type="button" class="secondary-button" (click)="openPreviewFocus()">Open preview studio</button>
+            </div>
+
+            <div class="compact-page-list">
+              @for (page of pagePlan; track page.pageNumber) {
+                <article class="page-list-card" [class.active]="selectedPreviewPage?.pageNumber === page.pageNumber">
+                  <div class="page-list-header">
+                    <button type="button" class="page-list-select" (click)="selectPreviewPage(page.pageNumber)">
+                      <strong>Page {{ page.pageNumber }}</strong>
+                      <span>{{ page.blocks.length }} blocks</span>
+                    </button>
+
+                    <button type="button" class="secondary-button compact-panel-button" (click)="openPreviewFocus(page.pageNumber)">Preview</button>
+                  </div>
+
+                  @if (selectedPreviewPage?.pageNumber === page.pageNumber) {
+                    <div class="page-block-list compact-page-tags">
+                      @for (block of page.blocks; track block.id) {
+                        <span class="tag">{{ getCanvasTitle(block) }}</span>
+                      }
+                    </div>
+                  }
+                </article>
+              }
+            </div>
+          </section>
+        }
+      </div>
+    </article>
+
+    <article class="panel canvas-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Canvas</h2>
+          <p>Keep the main editing surface wide, reorder blocks, and shape the printed document page by page.</p>
         </div>
-      </article>
-    }
+      </div>
 
-    @if (viewMode !== 'design') {
-      <article class="panel workspace-panel">
-        <div class="panel-header">
+      <div class="panel-scroll canvas-scroll">
+        <div class="drop-slot" (dragover)="allowDrop($event)" (drop)="dropAt(0)"></div>
+
+        @if (blocks.length) {
+          <div class="canvas">
+            @for (block of blocks; track block.id; let i = $index) {
+              <div class="canvas-entry">
+                <article
+                  class="design-card"
+                  [class.selected]="selectedBlockId === block.id"
+                  [class.full]="block.width === 'full'"
+                  [class.page-break-card]="block.kind === 'page-break'"
+                  draggable="true"
+                  tabindex="0"
+                  (click)="selectBlock(block.id)"
+                  (keydown.enter)="selectBlock(block.id)"
+                  (keydown.space)="selectBlock(block.id); $event.preventDefault()"
+                  (dragstart)="startBlockDrag(block.id)"
+                  (dragend)="clearDrag()"
+                >
+                  <div class="design-card-shell">
+                    <div class="design-card-title">
+                      <strong>{{ getCanvasTitle(block) }}</strong>
+                      <span>{{ getCanvasMeta(block) }}</span>
+                    </div>
+
+                    <div class="action-row compact design-card-actions">
+                      <button type="button" class="icon-button" (click)="moveBlock(block.id, -1)" aria-label="Move block up">↑</button>
+                      <button type="button" class="icon-button" (click)="moveBlock(block.id, 1)" aria-label="Move block down">↓</button>
+                      <button type="button" class="icon-button" (click)="duplicateBlock(block.id)" aria-label="Duplicate block">⧉</button>
+                      <button type="button" class="icon-button" (click)="removeBlock(block.id)" aria-label="Remove block">✕</button>
+                    </div>
+
+                    @if (block.kind === 'field') {
+                      <div class="field-card-meta">
+                        <div class="card-tags">
+                          <span class="tag">{{ block.source === 'json' ? 'JSON' : 'Custom' }}</span>
+                          <span class="tag">{{ block.controlType }}</span>
+                          <span class="tag">{{ isInlineField(block) ? 'inline row' : 'stacked row' }}</span>
+                          @if (getBlockPageNumber(block.id); as pageNumber) {
+                            <span class="tag">page {{ pageNumber }}</span>
+                          }
+                        </div>
+                        @if (getFieldByKey(block.fieldKey); as field) {
+                          <p class="card-summary">Source preview: {{ field.preview }}</p>
+                        }
+                      </div>
+                    }
+
+                    @if (block.kind === 'section') {
+                      <p class="card-summary">{{ block.subtitle }}</p>
+                    }
+
+                    @if (block.kind === 'paragraph') {
+                      <p class="card-summary">{{ block.content }}</p>
+                    }
+
+                    @if (block.kind === 'note') {
+                      <p class="card-summary">{{ block.content }}</p>
+                    }
+
+                    @if (block.kind === 'declaration') {
+                      <p class="card-summary">{{ block.content }}</p>
+                    }
+
+                    @if (block.kind === 'static-label') {
+                      <p class="card-summary">{{ block.content }}</p>
+                    }
+
+                    @if (block.kind === 'link') {
+                      <p class="card-summary">{{ block.href }}</p>
+                    }
+
+                    @if (block.kind === 'page-break') {
+                      <div class="page-break-summary">
+                        <span>Page break inserted here. The next block begins on a new A4 page.</span>
+                      </div>
+                    }
+                  </div>
+                </article>
+
+                <div class="drop-slot" (dragover)="allowDrop($event)" (drop)="dropAt(i + 1)"></div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-canvas">
+            <h3>Start the form by adding blocks</h3>
+            <p>Load JSON fields, add manual content, and insert page breaks to shape the printed document.</p>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article class="panel side-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Inspector / Output</h2>
+          <p>Keep block editing and generated Thymeleaf markup beside the canvas while preview opens larger in its own studio.</p>
+        </div>
+      </div>
+
+      <div class="panel-tabs panel-tabs-2 side-panel-switch" role="tablist" aria-label="Workspace panel mode">
+        @for (tab of sidePanelTabs; track tab.value) {
+          <button
+            type="button"
+            class="panel-tab"
+            [class.active]="sidePanelTab === tab.value"
+            (click)="setSidePanelTab(tab.value)"
+          >
+            {{ tab.label }}
+          </button>
+        }
+      </div>
+
+      <div class="panel-scroll side-panel-body">
+        @if (sidePanelTab === 'html') {
+          <section class="side-panel-section side-panel-code">
+            <div class="subsection-header">
+              <h3>Generated Thymeleaf HTML</h3>
+              <div class="action-row compact">
+                <button type="button" class="secondary-button" (click)="copyThymeleafHtml()">Copy</button>
+                <button type="button" class="secondary-button" (click)="downloadThymeleafHtml()">Download</button>
+              </div>
+            </div>
+
+            <p class="toolbar-note">Includes explicit A4 page wrappers, browser-print CSS, alignment settings, and header/footer markup.</p>
+            <textarea class="code-view code-view-inline" readonly [value]="thymeleafMarkup"></textarea>
+          </section>
+        }
+
+        @if (sidePanelTab === 'inspector') {
+          @if (selectedFieldBlock; as block) {
+            <div class="panel-tabs panel-tabs-2 inspector-tab-switch" role="tablist" aria-label="Field inspector sections">
+              @for (tab of inspectorTabs; track tab.value) {
+                <button
+                  type="button"
+                  class="panel-tab"
+                  [class.active]="inspectorTab === tab.value"
+                  (click)="setInspectorTab(tab.value)"
+                >
+                  {{ tab.label }}
+                </button>
+              }
+            </div>
+
+            @if (inspectorTab === 'content') {
+              <section class="inspector-section">
+                <div class="subsection-header">
+                  <h3>Field Settings</h3>
+                  <span>{{ block.source === 'json' ? 'Payload-bound' : 'Custom field' }}</span>
+                </div>
+
+                <div class="form-grid two-up compact-grid">
+                  <label>
+                    <span class="field-label">Label</span>
+                    <input type="text" [(ngModel)]="block.label" />
+                  </label>
+
+                  <label>
+                    <span class="field-label">Binding key</span>
+                    <input type="text" [(ngModel)]="block.bindingKey" />
+                  </label>
+
+                  <label>
+                    <span class="field-label">Control type</span>
+                    <select [(ngModel)]="block.controlType" (ngModelChange)="onFieldControlTypeChange(block)">
+                      @for (option of controlTypeOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+
+                  <label>
+                    <span class="field-label">Default value</span>
+                    <input type="text" [(ngModel)]="block.defaultValue" />
+                  </label>
+
+                  @if (block.controlType !== 'checkbox') {
+                    <label class="full-span">
+                      <span class="field-label">Placeholder</span>
+                      <input type="text" [(ngModel)]="block.placeholder" />
+                    </label>
+                  }
+                </div>
+              </section>
+
+              @if (usesChoiceOptions(block)) {
+                <section class="inspector-section">
+                  <div class="subsection-header">
+                    <h3>Choice Options</h3>
+                    <button type="button" class="secondary-button" (click)="addFieldOption(block)">Add option</button>
+                  </div>
+
+                  <div class="option-list">
+                    @for (option of block.options; track option.id) {
+                      <div class="option-row">
+                        <label>
+                          <span class="field-label">Label</span>
+                          <input type="text" [(ngModel)]="option.label" />
+                        </label>
+
+                        <label>
+                          <span class="field-label">Value</span>
+                          <input type="text" [(ngModel)]="option.value" />
+                        </label>
+
+                        <button type="button" class="icon-button remove-option" (click)="removeFieldOption(block, option.id)" aria-label="Remove option">✕</button>
+                      </div>
+                    }
+                  </div>
+                </section>
+              }
+            }
+
+            @if (inspectorTab === 'layout') {
+              <section class="inspector-section">
+                <div class="subsection-header">
+                  <h3>Field Alignment</h3>
+                  <span>Global defaults plus per-field override</span>
+                </div>
+
+                <div class="form-grid two-up compact-grid">
+                  <label>
+                    <span class="field-label">Width</span>
+                    <select [(ngModel)]="block.width">
+                      @for (option of widthOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+                </div>
+
+                <div class="alignment-choice-stack" role="group" aria-label="Field alignment mode">
+                  @for (option of fieldAlignmentOptions; track option.value) {
+                    <button
+                      type="button"
+                      class="alignment-choice-button"
+                      [class.active]="block.alignmentMode === option.value"
+                      (click)="block.alignmentMode = option.value"
+                    >
+                      {{ option.label }}
+                    </button>
+                  }
+                </div>
+
+                <div class="form-grid two-up compact-grid">
+                  <label>
+                    <span class="field-label">Label alignment</span>
+                    <select [(ngModel)]="block.labelAlign">
+                      @for (option of labelAlignOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+
+                  <label>
+                    <span class="field-label">Vertical alignment</span>
+                    <select [(ngModel)]="block.verticalAlign">
+                      @for (option of verticalAlignOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+
+                  <label class="full-span">
+                    <span class="field-label">Label width</span>
+                    <div class="range-control">
+                      <input type="range" min="20" max="48" step="1" [ngModel]="block.labelWidth" (ngModelChange)="updateSelectedFieldLabelWidth($event)" />
+                      <strong>{{ block.labelWidth }}%</strong>
+                    </div>
+                  </label>
+                </div>
+              </section>
+            }
+
+            @if (inspectorTab === 'validation') {
+              <section class="inspector-section">
+                <div class="subsection-header">
+                  <h3>Validation</h3>
+                  <span>HTML5 validation plus custom error metadata</span>
+                </div>
+
+                <div class="checkbox-stack">
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="block.required" />
+                    <span>Mark this field as required</span>
+                  </label>
+                </div>
+
+                <div class="form-grid two-up compact-grid">
+                  <label>
+                    <span class="field-label">Minimum length</span>
+                    <input type="text" [(ngModel)]="block.validation.minLength" />
+                  </label>
+
+                  <label>
+                    <span class="field-label">Maximum length</span>
+                    <input type="text" [(ngModel)]="block.validation.maxLength" />
+                  </label>
+
+                  <label>
+                    <span class="field-label">Minimum value</span>
+                    <input type="text" [(ngModel)]="block.validation.min" />
+                  </label>
+
+                  <label>
+                    <span class="field-label">Maximum value</span>
+                    <input type="text" [(ngModel)]="block.validation.max" />
+                  </label>
+
+                  <label class="full-span">
+                    <span class="field-label">Pattern</span>
+                    <input type="text" [(ngModel)]="block.validation.pattern" placeholder="^[A-Za-z0-9]+$" />
+                  </label>
+
+                  <label class="full-span">
+                    <span class="field-label">Custom error message</span>
+                    <textarea rows="3" [(ngModel)]="block.validation.customError"></textarea>
+                  </label>
+                </div>
+              </section>
+            }
+
+            @if (inspectorTab === 'accessibility') {
+              <section class="inspector-section">
+                <div class="subsection-header">
+                  <h3>Accessibility</h3>
+                  <span>Helper content and assistive presentation</span>
+                </div>
+
+                <label>
+                  <span class="field-label">Helper text</span>
+                  <textarea rows="4" [(ngModel)]="block.helperText"></textarea>
+                </label>
+
+                <div class="checkbox-stack">
+                  <label class="checkbox">
+                    <input type="checkbox" [(ngModel)]="block.hideLabel" />
+                    <span>Visually hide the label while keeping it accessible</span>
+                  </label>
+
+                  @if (block.controlType === 'radio' || block.controlType === 'checkbox-group') {
+                    <label class="checkbox">
+                      <input type="checkbox" [(ngModel)]="block.inline" />
+                      <span>Display options inline when space allows</span>
+                    </label>
+                  }
+                </div>
+
+                <p class="empty-state compact-note">
+                  Labels, helper text, required state, and focus styling are preserved in the generated Thymeleaf HTML.
+                </p>
+              </section>
+            }
+          }
+
+          @if (selectedSectionBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Section Heading</h3>
+                <span>Full-width grouping block</span>
+              </div>
+
+              <label>
+                <span class="field-label">Title</span>
+                <input type="text" [(ngModel)]="block.title" />
+              </label>
+
+              <label>
+                <span class="field-label">Subtitle</span>
+                <textarea rows="4" [(ngModel)]="block.subtitle"></textarea>
+              </label>
+            </section>
+          }
+
+          @if (selectedParagraphBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Instruction Paragraph</h3>
+                <span>Supportive contextual copy</span>
+              </div>
+
+              <label>
+                <span class="field-label">Content</span>
+                <textarea rows="8" [(ngModel)]="block.content"></textarea>
+              </label>
+
+              <label>
+                <span class="field-label">Width</span>
+                <select [(ngModel)]="block.width">
+                  @for (option of widthOptions; track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </label>
+            </section>
+          }
+
+          @if (selectedNoteBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Note Block</h3>
+                <span>Warnings or informational messages</span>
+              </div>
+
+              <label>
+                <span class="field-label">Content</span>
+                <textarea rows="6" [(ngModel)]="block.content"></textarea>
+              </label>
+
+              <label>
+                <span class="field-label">Emphasis</span>
+                <select [(ngModel)]="block.emphasis">
+                  <option value="info">Information</option>
+                  <option value="warning">Warning</option>
+                </select>
+              </label>
+            </section>
+          }
+
+          @if (selectedDeclarationBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Consent Checkbox</h3>
+                <span>Standalone declaration or agreement</span>
+              </div>
+
+              <div class="form-grid two-up compact-grid">
+                <label>
+                  <span class="field-label">Name</span>
+                  <input type="text" [(ngModel)]="block.name" />
+                </label>
+
+                <label>
+                  <span class="field-label">Width</span>
+                  <select [(ngModel)]="block.width">
+                    @for (option of widthOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span class="field-label">Statement text</span>
+                <textarea rows="5" [(ngModel)]="block.content"></textarea>
+              </label>
+
+              <label>
+                <span class="field-label">Helper text</span>
+                <textarea rows="3" [(ngModel)]="block.helperText"></textarea>
+              </label>
+
+              <div class="checkbox-stack">
+                <label class="checkbox">
+                  <input type="checkbox" [(ngModel)]="block.required" />
+                  <span>Require this agreement before submission</span>
+                </label>
+
+                <label class="checkbox">
+                  <input type="checkbox" [(ngModel)]="block.checkedByDefault" />
+                  <span>Check this option by default in the preview</span>
+                </label>
+              </div>
+            </section>
+          }
+
+          @if (selectedDividerBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Divider</h3>
+                <span>Visual separation between blocks</span>
+              </div>
+
+              <label>
+                <span class="field-label">Style</span>
+                <select [(ngModel)]="block.style">
+                  <option value="line">Line</option>
+                  <option value="space">Space only</option>
+                </select>
+              </label>
+            </section>
+          }
+
+          @if (selectedStaticLabelBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Static Label</h3>
+                <span>Non-interactive supporting copy</span>
+              </div>
+
+              <label>
+                <span class="field-label">Content</span>
+                <textarea rows="5" [(ngModel)]="block.content"></textarea>
+              </label>
+
+              <div class="form-grid two-up compact-grid">
+                <label>
+                  <span class="field-label">Tone</span>
+                  <select [(ngModel)]="block.tone">
+                    <option value="strong">Strong</option>
+                    <option value="muted">Muted</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span class="field-label">Width</span>
+                  <select [(ngModel)]="block.width">
+                    @for (option of widthOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </label>
+              </div>
+            </section>
+          }
+
+          @if (selectedLinkBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Link</h3>
+                <span>Standalone hyperlink block</span>
+              </div>
+
+              <label>
+                <span class="field-label">Link text</span>
+                <input type="text" [(ngModel)]="block.text" />
+              </label>
+
+              <label>
+                <span class="field-label">URL</span>
+                <input type="text" [(ngModel)]="block.href" />
+              </label>
+
+              <div class="checkbox-stack">
+                <label class="checkbox">
+                  <input type="checkbox" [(ngModel)]="block.openInNewTab" />
+                  <span>Open in a new tab</span>
+                </label>
+              </div>
+            </section>
+          }
+
+          @if (selectedPageBreakBlock; as block) {
+            <section class="inspector-section">
+              <div class="subsection-header">
+                <h3>Page Break</h3>
+                <span>Manual pagination control</span>
+              </div>
+
+              <label>
+                <span class="field-label">Label</span>
+                <input type="text" [(ngModel)]="block.title" />
+              </label>
+
+              <p class="empty-state">The next block after this marker begins on a new A4 page in preview and export.</p>
+            </section>
+          }
+
+          @if (!selectedBlock) {
+            <div class="empty-state tall">
+              <p>Select a block on the canvas to configure it here.</p>
+            </div>
+          }
+        }
+      </div>
+    </article>
+  </section>
+
+  @if (isPreviewFocusOpen) {
+    <div class="preview-dialog-backdrop" aria-hidden="true" (click)="closePreviewFocus()"></div>
+
+    <section class="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-dialog-title">
+      <div class="preview-dialog-header">
+        <div class="preview-dialog-copy">
+          <p class="eyebrow">Preview Studio</p>
+          <h2 id="preview-dialog-title">Live A4 Preview</h2>
+          <p>{{ previewModeDescription }}</p>
+        </div>
+
+        <div class="preview-dialog-actions">
+          <div class="view-switch compact-switch preview-mode-switch" role="tablist" aria-label="Preview mode">
+            @for (mode of previewModes; track mode.value) {
+              <button
+                type="button"
+                class="view-button compact-button"
+                [class.active]="previewMode === mode.value"
+                (click)="setPreviewMode(mode.value)"
+              >
+                {{ mode.label }}
+              </button>
+            }
+          </div>
+
+          <button type="button" class="secondary-button" (click)="downloadThymeleafHtml()">Download</button>
+          <button type="button" class="icon-button close-dialog-button" (click)="closePreviewFocus()" aria-label="Close preview studio">✕</button>
+        </div>
+      </div>
+
+      @if (selectedFieldBlock; as block) {
+        <div class="preview-toolbar">
           <div>
-            <h2>Generated Thymeleaf HTML</h2>
-            <p>The markup includes semantic structure, labels, and map-style Thymeleaf expressions.</p>
+            <p class="toolbar-label">Quick alignment for {{ block.label }}</p>
+            <p class="toolbar-note">Adjust the selected field while the preview updates immediately.</p>
+          </div>
+
+          <div class="toolbar-grid">
+            <div class="pill-switch" role="group" aria-label="Quick field layout">
+              @for (option of fieldAlignmentOptions; track option.value) {
+                <button
+                  type="button"
+                  class="pill-button"
+                  [class.active]="block.alignmentMode === option.value"
+                  (click)="block.alignmentMode = option.value"
+                >
+                  {{ option.value === 'inherit' ? 'Global' : option.label }}
+                </button>
+              }
+            </div>
+
+            <label>
+              <span class="field-label">Label width</span>
+              <div class="range-control">
+                <input type="range" min="20" max="48" step="1" [ngModel]="block.labelWidth" (ngModelChange)="updateSelectedFieldLabelWidth($event)" />
+                <strong>{{ block.labelWidth }}%</strong>
+              </div>
+            </label>
           </div>
         </div>
+      }
 
-        <textarea class="code-view" readonly [value]="thymeleafMarkup"></textarea>
-      </article>
-    }
-  </section>
+      <div class="preview-dialog-body">
+        <aside class="preview-dialog-sidebar">
+          <div class="subsection-header">
+            <h3>Pages</h3>
+            <span>{{ pagePlan.length }} total</span>
+          </div>
+
+          <div class="preview-page-strip preview-page-strip-stacked">
+            @for (page of pagePlan; track page.pageNumber) {
+              <button
+                type="button"
+                class="page-chip"
+                [class.active]="selectedPreviewPage?.pageNumber === page.pageNumber"
+                (click)="selectPreviewPage(page.pageNumber)"
+              >
+                <strong>Page {{ page.pageNumber }}</strong>
+                <span>{{ page.blocks.length }} blocks</span>
+              </button>
+            }
+          </div>
+
+          @if (selectedPreviewPage; as page) {
+            <div class="page-summary-card">
+              <div class="page-summary-top">
+                <strong>Page {{ page.pageNumber }}</strong>
+                <span>{{ page.blocks.length }} blocks</span>
+              </div>
+
+              <div class="page-block-list">
+                @for (block of page.blocks; track block.id) {
+                  <span class="tag">{{ getCanvasTitle(block) }}</span>
+                }
+              </div>
+            </div>
+          }
+        </aside>
+
+        <div class="preview-dialog-stage">
+          <div class="preview-frame-shell preview-frame-shell-focus">
+            <iframe title="Live form preview" [srcdoc]="safePreviewDocument"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+  }
 </div>
