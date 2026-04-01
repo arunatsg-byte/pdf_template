@@ -1,0 +1,301 @@
+<div class="app-shell" [style.--page-background]="activeTheme.pageBackground" [style.--canvas-background]="activeTheme.canvasBackground"
+  [style.--panel-background]="activeTheme.panelBackground" [style.--accent]="activeTheme.accent"
+  [style.--text-color]="activeTheme.text" [style.--muted-text]="activeTheme.mutedText"
+  [style.--border-color]="activeTheme.border" [style.--radius]="activeTheme.radius"
+  [style.--heading-font]="activeTheme.headingFont" [style.--body-font]="activeTheme.bodyFont">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Angular 17 JSON To PDF Template Studio</p>
+      <h1>Design ADA-minded Thymeleaf PDF templates from JSON.</h1>
+      <p class="subtitle">
+        Upload or paste JSON, drag fields into a layout, preview the result, and save reusable themes and templates.
+      </p>
+    </div>
+
+    <div class="view-switch" role="tablist" aria-label="Workspace view mode">
+      <button type="button" class="view-button" [class.active]="viewMode === 'design'" (click)="setViewMode('design')">
+        Design
+      </button>
+      <button type="button" class="view-button" [class.active]="viewMode === 'html'" (click)="setViewMode('html')">
+        Generate HTML
+      </button>
+      <button type="button" class="view-button" [class.active]="viewMode === 'split'" (click)="setViewMode('split')">
+        Side By Side
+      </button>
+    </div>
+  </header>
+
+  <section class="top-grid" aria-label="JSON and theme controls">
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>JSON Source</h2>
+          <p>Paste JSON or import a file to generate draggable fields.</p>
+        </div>
+
+        <label class="upload-button">
+          <input type="file" accept=".json,application/json" (change)="onFileSelected($event)" />
+          Upload JSON
+        </label>
+      </div>
+
+      <label class="field-label" for="template-name">Template name</label>
+      <input id="template-name" type="text" [(ngModel)]="templateName" />
+
+      <label class="field-label" for="json-input">JSON content</label>
+      <textarea id="json-input" rows="12" [(ngModel)]="jsonInput" spellcheck="false"></textarea>
+
+      <div class="action-row">
+        <button type="button" class="primary-button" (click)="parseJsonInput()">Load JSON</button>
+        <button type="button" class="secondary-button" (click)="resetWorkspace()">Reset sample</button>
+        <button type="button" class="secondary-button" (click)="saveTemplate()">Save template</button>
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Theme Library</h2>
+          <p>Create an accessible theme once and reuse it across templates.</p>
+        </div>
+
+        <select aria-label="Apply saved theme" [ngModel]="selectedThemeId" (ngModelChange)="applyTheme($event)">
+          @for (theme of themes; track theme.id) {
+            <option [value]="theme.id">{{ theme.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="theme-grid">
+        <label>
+          <span class="field-label">Theme name</span>
+          <input type="text" [(ngModel)]="themeDraft.name" />
+        </label>
+        <label>
+          <span class="field-label">Accent</span>
+          <input type="color" [(ngModel)]="themeDraft.accent" />
+        </label>
+        <label>
+          <span class="field-label">Page background</span>
+          <input type="color" [(ngModel)]="themeDraft.pageBackground" />
+        </label>
+        <label>
+          <span class="field-label">Canvas background</span>
+          <input type="color" [(ngModel)]="themeDraft.canvasBackground" />
+        </label>
+        <label>
+          <span class="field-label">Panel background</span>
+          <input type="color" [(ngModel)]="themeDraft.panelBackground" />
+        </label>
+        <label>
+          <span class="field-label">Text</span>
+          <input type="color" [(ngModel)]="themeDraft.text" />
+        </label>
+        <label>
+          <span class="field-label">Muted text</span>
+          <input type="color" [(ngModel)]="themeDraft.mutedText" />
+        </label>
+        <label>
+          <span class="field-label">Border</span>
+          <input type="color" [(ngModel)]="themeDraft.border" />
+        </label>
+        <label>
+          <span class="field-label">Heading font</span>
+          <select [(ngModel)]="themeDraft.headingFont">
+            @for (font of fontChoices; track font) {
+              <option [value]="font">{{ font }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span class="field-label">Body font</span>
+          <select [(ngModel)]="themeDraft.bodyFont">
+            @for (font of fontChoices; track font) {
+              <option [value]="font">{{ font }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="action-row">
+        <button type="button" class="primary-button" (click)="saveTheme()">Save theme</button>
+      </div>
+    </article>
+  </section>
+
+  <section class="top-grid" aria-label="Template assets">
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Fields</h2>
+          <p>Drag properties into the design surface to build your template.</p>
+        </div>
+
+        <div class="action-row compact">
+          <button type="button" class="secondary-button" (click)="addHeading()">Add heading</button>
+          <button type="button" class="secondary-button" (click)="addDivider()">Add divider</button>
+        </div>
+      </div>
+
+      <div class="field-palette" aria-label="Draggable JSON properties">
+        @for (field of jsonFields; track field.key) {
+          <button
+            type="button"
+            class="palette-card"
+            draggable="true"
+            (dragstart)="startFieldDrag(field.key)"
+            (dragend)="clearDrag()"
+            [attr.aria-label]="'Drag field ' + field.label"
+          >
+            <strong>{{ field.label }}</strong>
+            <span>{{ field.preview }}</span>
+            <small>{{ field.type }}</small>
+          </button>
+        }
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Saved Templates</h2>
+          <p>Reuse the same theme on multiple template layouts.</p>
+        </div>
+      </div>
+
+      <div class="saved-template-list">
+        @if (savedTemplates.length) {
+          @for (template of savedTemplates; track template.id) {
+            <button type="button" class="saved-template-card" (click)="loadTemplate(template.id)">
+              <strong>{{ template.name }}</strong>
+              <span>{{ template.updatedAt | date:'medium' }}</span>
+            </button>
+          }
+        } @else {
+          <p class="empty-state">Save a layout to build your reusable template library.</p>
+        }
+      </div>
+    </article>
+  </section>
+
+  <p class="status" role="status" aria-live="polite">{{ statusMessage }}</p>
+
+  <section class="workspace" [class.design-only]="viewMode === 'design'" [class.html-only]="viewMode === 'html'">
+    @if (viewMode !== 'html') {
+      <article class="panel workspace-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Design Workspace</h2>
+            <p>Drag, reorder, and refine the cards while keeping the preview visible beside the editor.</p>
+          </div>
+        </div>
+
+        <div class="design-preview-layout">
+          <section class="design-surface-panel" aria-label="Design surface editor">
+            <div class="drop-slot" (dragover)="allowDrop($event)" (drop)="dropAt(0)"></div>
+
+            <div class="canvas">
+              @for (block of blocks; track block.id; let i = $index) {
+                <div class="canvas-block">
+                  <article
+                    class="design-card"
+                    [class.full]="block.width === 'full'"
+                    draggable="true"
+                    (dragstart)="startBlockDrag(block.id)"
+                    (dragend)="clearDrag()"
+                  >
+                    <div class="design-card-header">
+                      <div class="design-card-title">
+                        <strong>{{ block.label }}</strong>
+                        @if (getFieldForBlock(block); as field) {
+                          <span class="source-key">{{ field.key }}</span>
+                        }
+                      </div>
+                      <div class="action-row compact">
+                        <button type="button" class="icon-button" (click)="moveBlock(block.id, -1)" aria-label="Move block up">↑</button>
+                        <button type="button" class="icon-button" (click)="moveBlock(block.id, 1)" aria-label="Move block down">↓</button>
+                        <button type="button" class="icon-button" (click)="removeBlock(block.id)" aria-label="Remove block">✕</button>
+                      </div>
+                    </div>
+
+                    @if (block.kind === 'field') {
+                      <div class="card-controls">
+                        <label>
+                          <span class="field-label">HTML label</span>
+                          <input type="text" [(ngModel)]="block.label" />
+                        </label>
+                        <label>
+                          <span class="field-label">Control</span>
+                          <select [(ngModel)]="block.controlType">
+                            @for (controlType of controlTypes; track controlType) {
+                              <option [value]="controlType">{{ controlType }}</option>
+                            }
+                          </select>
+                        </label>
+                        <label>
+                          <span class="field-label">Width</span>
+                          <select [(ngModel)]="block.width">
+                            <option value="half">Half</option>
+                            <option value="full">Full</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span class="field-label">Emphasis</span>
+                          <select [(ngModel)]="block.emphasis">
+                            <option value="default">Default</option>
+                            <option value="strong">Strong</option>
+                          </select>
+                        </label>
+                        @if (usesChoiceOptions(block)) {
+                          <label class="full-span">
+                            <span class="field-label">Options</span>
+                            <input type="text" [(ngModel)]="block.optionsText" placeholder="user, admin, guest" />
+                          </label>
+                        }
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="block.visibleLabel" />
+                          <span>Show label</span>
+                        </label>
+                        <label class="checkbox">
+                          <input type="checkbox" [(ngModel)]="block.required" />
+                          <span>Mandatory mark</span>
+                        </label>
+                      </div>
+                    } @else if (block.kind === 'heading') {
+                      <label>
+                        <span class="field-label">Heading text</span>
+                        <input type="text" [(ngModel)]="block.label" />
+                      </label>
+                    } @else {
+                      <p class="hint-text">Divider adds spacing and a visual separator in the generated PDF template.</p>
+                    }
+                  </article>
+
+                  <div class="drop-slot" (dragover)="allowDrop($event)" (drop)="dropAt(i + 1)"></div>
+                </div>
+              }
+            </div>
+          </section>
+
+          <aside class="preview-frame-shell" aria-label="Live preview">
+            <h3>Live preview</h3>
+            <iframe title="Live template preview" [attr.srcdoc]="previewDocument"></iframe>
+          </aside>
+        </div>
+      </article>
+    }
+
+    @if (viewMode !== 'design') {
+      <article class="panel workspace-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Generated Thymeleaf HTML</h2>
+            <p>The markup includes semantic structure, labels, and map-style Thymeleaf expressions.</p>
+          </div>
+        </div>
+
+        <textarea class="code-view" readonly [value]="thymeleafMarkup"></textarea>
+      </article>
+    }
+  </section>
+</div>
