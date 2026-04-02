@@ -35,11 +35,6 @@
     </div>
 
     <div class="hero-actions">
-      <div class="hero-primary-actions">
-        <button type="button" class="primary-button" (click)="openPreviewFocus()">Open Preview Studio</button>
-        <button type="button" class="secondary-button" (click)="downloadThymeleafHtml()">Download HTML</button>
-      </div>
-
       <div class="hero-controls">
         <div class="control-group">
           <span class="control-group-label">App Theme</span>
@@ -90,6 +85,14 @@
       </div>
     </div>
   </header>
+
+  @if (!isPreviewFocusOpen) {
+    <div class="floating-action-dock" role="region" aria-label="Quick actions">
+      <span class="floating-action-label">Quick actions</span>
+      <button type="button" class="primary-button floating-action-button" (click)="openPreviewFocus()">Open Preview Studio</button>
+      <button type="button" class="secondary-button floating-action-button" (click)="downloadThymeleafHtml()">Download HTML</button>
+    </div>
+  }
 
   <section class="settings-tabbar" aria-label="Workspace settings tabs">
     <div class="settings-overview">
@@ -957,9 +960,15 @@
                   (dragend)="clearDrag()"
                 >
                   <div class="design-card-shell">
-                    <div class="design-card-title">
-                      <strong>{{ getCanvasTitle(block) }}</strong>
-                      <span>{{ getCanvasMeta(block) }}</span>
+                    <div class="design-card-topline">
+                      <span class="canvas-drag-handle" aria-hidden="true">⋮⋮</span>
+                      <div class="design-card-title">
+                        <div class="design-card-title-row">
+                          <strong>{{ getCanvasTitle(block) }}</strong>
+                          <span class="canvas-kind-chip">{{ getCanvasKindLabel(block) }}</span>
+                        </div>
+                        <span>{{ getCanvasMeta(block) }}</span>
+                      </div>
                     </div>
 
                     <div class="action-row compact design-card-actions">
@@ -1011,6 +1020,7 @@
 
                     @if (block.kind === 'page-break') {
                       <div class="page-break-summary">
+                        <strong>{{ block.title || 'Page break' }}</strong>
                         <span>Page break inserted here. The next block begins on a new A4 page.</span>
                       </div>
                     }
@@ -1607,7 +1617,7 @@
 
         <div class="preview-dialog-stage">
           <div class="preview-frame-shell preview-frame-shell-focus">
-            <iframe title="Live form preview" [srcdoc]="safePreviewDocument"></iframe>
+            <iframe #previewFocusFrame title="Live form preview" sandbox="" referrerpolicy="no-referrer"></iframe>
           </div>
         </div>
       </div>

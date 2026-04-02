@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { AfterViewChecked, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 import { buildFormDocument, buildPagePlan, PlannedPage } from './form-builder.renderer';
 import {
@@ -9,7 +8,6 @@ import {
   ChoiceOption,
   CONTROL_TYPE_OPTIONS,
   DEFAULT_FORM_LAYOUT,
-  DEFAULT_PAGE_REGION,
   DEFAULT_PAGE_SETTINGS,
   DEFAULT_THEME,
   DeclarationBlock,
@@ -47,6 +45,14 @@ import {
   VerticalAlign,
   WIDTH_OPTIONS
 } from './form-builder.models';
+import {
+  normalizeCssColor,
+  normalizeCssLength,
+  normalizeFontChoice,
+  normalizeNumberInRange,
+  normalizeString,
+  normalizeUrl
+} from './form-builder.sanitizers';
 
 type DragItem =
   | { type: 'json-field'; fieldKey: string }
@@ -68,8 +74,10 @@ type SidePanelTab = 'inspector' | 'html';
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
-export class AppComponent implements OnInit {
-  private readonly sanitizer = inject(DomSanitizer);
+export class AppComponent implements OnInit, AfterViewChecked {
+  @ViewChild('previewFocusFrame') previewFocusFrame?: ElementRef<HTMLIFrameElement>;
+
+  private lastPreviewFrameDocument: string | null = null;
 
   readonly storageThemeKey = 'json-pdf-designer-themes';
   readonly storageTemplateKey = 'json-pdf-designer-templates';
@@ -152,6 +160,10 @@ export class AppComponent implements OnInit {
     this.loadSavedThemes();
     this.loadSavedTemplates();
     this.resetWorkspace();
+  }
+
+  ngAfterViewChecked(): void {
+    this.syncPreviewFrameDocument();
   }
 
   get activeTheme(): ThemePreset {
@@ -287,10 +299,6 @@ export class AppComponent implements OnInit {
     return this.paletteTabs.find((tab) => tab.value === this.paletteTab)?.description ?? '';
   }
 
-  get safePreviewDocument(): SafeHtml {
-    return this.sanitizer.bypassSecurityTrustHtml(this.activePreviewDocument);
-  }
-
   get thymeleafMarkup(): string {
     return buildFormDocument({
       blocks: this.blocks,
@@ -343,10 +351,12 @@ export class AppComponent implements OnInit {
 
     this.syncSelectedPreviewPage();
     this.isPreviewFocusOpen = true;
+    this.lastPreviewFrameDocument = null;
   }
 
   closePreviewFocus(): void {
     this.isPreviewFocusOpen = false;
+    this.lastPreviewFrameDocument = null;
   }
 
   parseJsonInput(): void {
@@ -581,10 +591,13 @@ export class AppComponent implements OnInit {
   }
 
   saveTheme(): void {
-    const nextTheme = {
-      ...this.themeDraft,
-      id: this.themeDraft.id === DEFAULT_THEME.id ? this.createId() : this.themeDraft.id || this.createId()
-    };
+    const nextTheme = this.normalizeTheme(
+      {
+        ...this.themeDraft,
+        id: this.themeDraft.id === DEFAULT_THEME.id ? this.createId() : this.themeDraft.id || this.createId()
+      },
+      this.themeDraft.name || 'Custom Theme'
+    );
     const existingIndex = this.themes.findIndex((theme) => theme.id === nextTheme.id);
 
     if (existingIndex >= 0) {
@@ -791,6 +804,31 @@ export class AppComponent implements OnInit {
         return `Manual page divider`;
       default:
         return pageLabel.trim();
+    }
+  }
+
+  getCanvasKindLabel(block: BuilderBlock): string {
+    switch (block.kind) {
+      case 'field':
+        return block.source === 'json' ? 'JSON field' : 'Custom field';
+      case 'section':
+        return 'Section';
+      case 'paragraph':
+        return 'Paragraph';
+      case 'note':
+        return 'Note';
+      case 'declaration':
+        return 'Consent';
+      case 'divider':
+        return 'Divider';
+      case 'static-label':
+        return 'Label';
+      case 'link':
+        return 'Link';
+      case 'page-break':
+        return 'Page break';
+      default:
+        return 'Block';
     }
   }
 
@@ -1062,10 +1100,13 @@ export class AppComponent implements OnInit {
   }
 
   private prepareThemeSnapshot(): ThemePreset {
-    return {
-      ...this.themeDraft,
-      id: this.themeDraft.id === DEFAULT_THEME.id ? this.createId() : this.themeDraft.id || this.createId()
-    };
+    return this.normalizeTheme(
+      {
+        ...this.themeDraft,
+        id: this.themeDraft.id === DEFAULT_THEME.id ? this.createId() : this.themeDraft.id || this.createId()
+      },
+      this.themeDraft.name || 'Template Theme'
+    );
   }
 
   private upsertTemplate(template: SavedTemplate): void {
@@ -1079,12 +1120,7 @@ export class AppComponent implements OnInit {
   }
 
   private applyImportedTheme(theme: ThemePreset): void {
-    const normalizedTheme = {
-      ...DEFAULT_THEME,
-      ...theme,
-      id: theme.id || this.createId(),
-      name: theme.name || 'Imported Theme'
-    };
+    const normalizedTheme = this.normalizeTheme(theme, 'Imported Theme');
     const existingIndex = this.themes.findIndex((item) => item.id === normalizedTheme.id);
 
     if (existingIndex >= 0) {
@@ -1121,8 +1157,10 @@ export class AppComponent implements OnInit {
     }
 
     try {
-      const parsed = JSON.parse(raw) as ThemePreset[];
-      const customThemes = parsed.filter((theme) => theme.id !== DEFAULT_THEME.id);
+      const parsed = JSON.parse(raw) as unknown[];
+      const customThemes = parsed
+        .map((theme) => this.normalizeTheme(theme, 'Saved Theme'))
+        .filter((theme) => theme.id !== DEFAULT_THEME.id);
       this.themes = [DEFAULT_THEME, ...customThemes];
     } catch {
       this.themes = [DEFAULT_THEME];
@@ -1218,6 +1256,22 @@ export class AppComponent implements OnInit {
     }
   }
 
+  private syncPreviewFrameDocument(): void {
+    if (!this.isPreviewFocusOpen) {
+      this.lastPreviewFrameDocument = null;
+      return;
+    }
+
+    const iframe = this.previewFocusFrame?.nativeElement;
+    const previewDocument = this.activePreviewDocument;
+    if (!iframe || this.lastPreviewFrameDocument === previewDocument) {
+      return;
+    }
+
+    iframe.srcdoc = previewDocument;
+    this.lastPreviewFrameDocument = previewDocument;
+  }
+
   private normalizeSavedTemplate(raw: unknown): SavedTemplate | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -1228,10 +1282,7 @@ export class AppComponent implements OnInit {
       ? template.blocks.map((block) => this.normalizeBlock(block)).filter((block): block is BuilderBlock => block !== null)
       : [];
 
-    const themeSnapshot = {
-      ...DEFAULT_THEME,
-      ...(template.themeSnapshot ?? {})
-    };
+    const themeSnapshot = this.normalizeTheme(template.themeSnapshot, 'Imported Theme');
 
     return {
       id: typeof template.id === 'string' && template.id ? template.id : this.createId(),
@@ -1290,7 +1341,7 @@ export class AppComponent implements OnInit {
           ...(typeof block.validation === 'object' && block.validation ? (block.validation as object) : {})
         },
         alignmentMode: this.normalizeFieldAlignmentMode(block.alignmentMode),
-        labelWidth: this.normalizeNumber(block.labelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth),
+        labelWidth: normalizeNumberInRange(block.labelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth, 20, 48),
         labelAlign: this.normalizeHorizontalAlign(block.labelAlign),
         verticalAlign: this.normalizeVerticalAlign(block.verticalAlign)
       };
@@ -1417,10 +1468,10 @@ export class AppComponent implements OnInit {
 
     return {
       defaultFieldLayout: layout.defaultFieldLayout === 'stacked' ? 'stacked' : 'inline',
-      defaultLabelWidth: this.normalizeNumber(layout.defaultLabelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth),
+      defaultLabelWidth: normalizeNumberInRange(layout.defaultLabelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth, 20, 48),
       defaultLabelAlign: layout.defaultLabelAlign === 'end' ? 'end' : 'start',
       defaultVerticalAlign: layout.defaultVerticalAlign === 'start' ? 'start' : 'center',
-      rowGap: typeof layout.rowGap === 'string' && layout.rowGap ? layout.rowGap : DEFAULT_FORM_LAYOUT.rowGap
+      rowGap: normalizeCssLength(layout.rowGap, DEFAULT_FORM_LAYOUT.rowGap)
     };
   }
 
@@ -1428,8 +1479,16 @@ export class AppComponent implements OnInit {
     const settings = raw && typeof raw === 'object' ? (raw as Partial<PageSettings>) : {};
 
     return {
-      ...structuredClone(DEFAULT_PAGE_SETTINGS),
-      ...settings,
+      size: 'A4',
+      orientation: settings.orientation === 'landscape' ? 'landscape' : 'portrait',
+      marginTop: normalizeCssLength(settings.marginTop, DEFAULT_PAGE_SETTINGS.marginTop),
+      marginRight: normalizeCssLength(settings.marginRight, DEFAULT_PAGE_SETTINGS.marginRight),
+      marginBottom: normalizeCssLength(settings.marginBottom, DEFAULT_PAGE_SETTINGS.marginBottom),
+      marginLeft: normalizeCssLength(settings.marginLeft, DEFAULT_PAGE_SETTINGS.marginLeft),
+      pageGap: normalizeCssLength(settings.pageGap, DEFAULT_PAGE_SETTINGS.pageGap),
+      headerHeight: normalizeCssLength(settings.headerHeight, DEFAULT_PAGE_SETTINGS.headerHeight),
+      footerHeight: normalizeCssLength(settings.footerHeight, DEFAULT_PAGE_SETTINGS.footerHeight),
+      autoPaginate: typeof settings.autoPaginate === 'boolean' ? settings.autoPaginate : DEFAULT_PAGE_SETTINGS.autoPaginate,
       defaultHeader: this.normalizePageRegion(settings.defaultHeader, DEFAULT_PAGE_SETTINGS.defaultHeader),
       defaultFooter: this.normalizePageRegion(settings.defaultFooter, DEFAULT_PAGE_SETTINGS.defaultFooter)
     };
@@ -1444,7 +1503,7 @@ export class AppComponent implements OnInit {
       const override = entry as Partial<PageOverride>;
       return {
         id: typeof override.id === 'string' && override.id ? override.id : this.createId(),
-        pageNumber: this.normalizeNumber(override.pageNumber, 1),
+        pageNumber: Math.max(1, Math.round(this.normalizeNumber(override.pageNumber, 1))),
         useCustomHeader: Boolean(override.useCustomHeader),
         useCustomFooter: Boolean(override.useCustomFooter),
         header: this.normalizePageRegion(override.header, DEFAULT_PAGE_SETTINGS.defaultHeader),
@@ -1457,9 +1516,48 @@ export class AppComponent implements OnInit {
     const region = raw && typeof raw === 'object' ? (raw as Partial<PageRegionConfig>) : {};
 
     return {
-      ...structuredClone(defaults),
-      ...region,
+      enabled: typeof region.enabled === 'boolean' ? region.enabled : defaults.enabled,
+      eyebrow: normalizeString(region.eyebrow, defaults.eyebrow),
+      title: normalizeString(region.title, defaults.title),
+      body: normalizeString(region.body, defaults.body),
+      metaText: normalizeString(region.metaText, defaults.metaText),
+      logoUrl: normalizeUrl(region.logoUrl, { allowRelative: true, allowDataImage: true }),
+      showPageNumber: typeof region.showPageNumber === 'boolean' ? region.showPageNumber : defaults.showPageNumber,
+      showDate: typeof region.showDate === 'boolean' ? region.showDate : defaults.showDate,
+      divider: typeof region.divider === 'boolean' ? region.divider : defaults.divider,
       align: region.align === 'center' ? 'center' : region.align === 'end' ? 'end' : 'start'
+    };
+  }
+
+  private normalizeTheme(raw: unknown, fallbackName = 'Imported Theme'): ThemePreset {
+    const theme = raw && typeof raw === 'object' ? (raw as Partial<ThemePreset>) : {};
+    const normalizedName = normalizeString(theme.name, fallbackName).trim();
+
+    return {
+      id: typeof theme.id === 'string' && theme.id ? theme.id : this.createId(),
+      name: normalizedName || fallbackName,
+      pageBackground: normalizeCssColor(theme.pageBackground, DEFAULT_THEME.pageBackground),
+      surfaceBackground: normalizeCssColor(theme.surfaceBackground, DEFAULT_THEME.surfaceBackground),
+      panelBackground: normalizeCssColor(theme.panelBackground, DEFAULT_THEME.panelBackground),
+      sectionBackground: normalizeCssColor(theme.sectionBackground, DEFAULT_THEME.sectionBackground),
+      sectionText: normalizeCssColor(theme.sectionText, DEFAULT_THEME.sectionText),
+      primary: normalizeCssColor(theme.primary, DEFAULT_THEME.primary),
+      primaryText: normalizeCssColor(theme.primaryText, DEFAULT_THEME.primaryText),
+      text: normalizeCssColor(theme.text, DEFAULT_THEME.text),
+      mutedText: normalizeCssColor(theme.mutedText, DEFAULT_THEME.mutedText),
+      labelText: normalizeCssColor(theme.labelText, DEFAULT_THEME.labelText),
+      border: normalizeCssColor(theme.border, DEFAULT_THEME.border),
+      inputBackground: normalizeCssColor(theme.inputBackground, DEFAULT_THEME.inputBackground),
+      inputText: normalizeCssColor(theme.inputText, DEFAULT_THEME.inputText),
+      focus: normalizeCssColor(theme.focus, DEFAULT_THEME.focus),
+      required: normalizeCssColor(theme.required, DEFAULT_THEME.required),
+      error: normalizeCssColor(theme.error, DEFAULT_THEME.error),
+      noteBackground: normalizeCssColor(theme.noteBackground, DEFAULT_THEME.noteBackground),
+      noteBorder: normalizeCssColor(theme.noteBorder, DEFAULT_THEME.noteBorder),
+      link: normalizeCssColor(theme.link, DEFAULT_THEME.link),
+      radius: normalizeCssLength(theme.radius, DEFAULT_THEME.radius),
+      headingFont: normalizeFontChoice(theme.headingFont, DEFAULT_THEME.headingFont, FONT_CHOICES),
+      bodyFont: normalizeFontChoice(theme.bodyFont, DEFAULT_THEME.bodyFont, FONT_CHOICES)
     };
   }
 

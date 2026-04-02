@@ -262,29 +262,29 @@ export const SAMPLE_JSON = `{
 
 export const DEFAULT_THEME: ThemePreset = {
   id: 'theme-default',
-  name: 'Modern Print Studio',
-  pageBackground: '#edf2f8',
+  name: 'Citi Enterprise Blue',
+  pageBackground: '#f3f7fb',
   surfaceBackground: '#ffffff',
-  panelBackground: '#f8fafc',
-  sectionBackground: '#123b8f',
+  panelBackground: '#f7f9fc',
+  sectionBackground: '#0f3d75',
   sectionText: '#ffffff',
-  primary: '#2563eb',
+  primary: '#005aa8',
   primaryText: '#ffffff',
-  text: '#0f172a',
-  mutedText: '#475569',
-  labelText: '#1e293b',
-  border: '#cbd5e1',
+  text: '#112b5f',
+  mutedText: '#5f7194',
+  labelText: '#14376d',
+  border: '#c8d6e8',
   inputBackground: '#ffffff',
-  inputText: '#0f172a',
-  focus: '#2563eb',
-  required: '#be123c',
-  error: '#be123c',
-  noteBackground: '#eff6ff',
-  noteBorder: '#bfdbfe',
-  link: '#2563eb',
-  radius: '18px',
-  headingFont: '"Georgia", "Times New Roman", serif',
-  bodyFont: '"Avenir Next", "Segoe UI", sans-serif'
+  inputText: '#112b5f',
+  focus: '#005aa8',
+  required: '#c61f36',
+  error: '#c61f36',
+  noteBackground: '#edf4fb',
+  noteBorder: '#b8cde7',
+  link: '#005aa8',
+  radius: '16px',
+  headingFont: '"Avenir Next", "Helvetica Neue", "Segoe UI", Arial, sans-serif',
+  bodyFont: '"Avenir Next", "Helvetica Neue", "Segoe UI", Arial, sans-serif'
 };
 
 export const DEFAULT_FORM_LAYOUT: FormLayoutSettings = {
@@ -339,10 +339,10 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
 };
 
 export const FONT_CHOICES = [
-  '"Avenir Next", "Segoe UI", sans-serif',
-  '"Gill Sans", "Trebuchet MS", sans-serif',
-  '"Georgia", "Times New Roman", serif',
-  '"Iowan Old Style", "Palatino Linotype", serif'
+  '"Avenir Next", "Helvetica Neue", "Segoe UI", Arial, sans-serif',
+  '"Helvetica Neue", "Segoe UI", Arial, sans-serif',
+  '"Segoe UI", Arial, sans-serif',
+  'Arial, sans-serif'
 ];
 
 export const CONTROL_TYPE_OPTIONS: Array<SelectOption<FieldControlType>> = [

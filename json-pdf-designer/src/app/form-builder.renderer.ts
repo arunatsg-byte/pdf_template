@@ -1,9 +1,13 @@
 import {
   BuilderBlock,
   ChoiceOption,
+  DEFAULT_FORM_LAYOUT,
+  DEFAULT_PAGE_SETTINGS,
+  DEFAULT_THEME,
   DeclarationBlock,
   DividerBlock,
   FieldBlock,
+  FONT_CHOICES,
   FormLayoutSettings,
   HorizontalAlign,
   JsonField,
@@ -23,6 +27,14 @@ import {
   ThemePreset,
   VerticalAlign
 } from './form-builder.models';
+import {
+  normalizeCssColor,
+  normalizeCssLength,
+  normalizeFontChoice,
+  normalizeNumberInRange,
+  normalizeString,
+  normalizeUrl
+} from './form-builder.sanitizers';
 
 export interface PlannedPage {
   pageNumber: number;
@@ -80,20 +92,24 @@ export function buildFormDocument({
   pageOverrides,
   lockDesktopLayout = false
 }: BuildFormDocumentOptions): string {
+  const safeTitle = title.trim() || 'Untitled Form';
+  const safeTheme = normalizeThemeForRender(theme);
+  const safeFormLayout = normalizeFormLayoutForRender(formLayout);
+  const safePageSettings = normalizePageSettingsForRender(pageSettings);
   const fieldMap = new Map(jsonFields.map((field) => [field.key, field]));
   const pagePlan = buildPagePlan({
     blocks,
     layoutMode,
-    title,
-    pageSettings,
+    title: safeTitle,
+    pageSettings: safePageSettings,
     pageOverrides,
-    formLayout
+    formLayout: safeFormLayout
   });
 
   const pagesMarkup = pagePlan
     .map((page) => {
       const pageBlocks = page.blocks
-        .map((block) => renderBlock(block, fieldMap, layoutMode, useThymeleaf, formLayout))
+        .map((block) => renderBlock(block, fieldMap, layoutMode, useThymeleaf, safeFormLayout))
         .filter(Boolean)
         .join('\n');
 
@@ -114,41 +130,41 @@ export function buildFormDocument({
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(title)}</title>
+  <title>${escapeHtml(safeTitle)}</title>
   <style>
     :root {
-      --page-width: ${pageSettings.orientation === 'portrait' ? '210mm' : '297mm'};
-      --page-height: ${pageSettings.orientation === 'portrait' ? '297mm' : '210mm'};
-      --page-gap: ${escapeCss(pageSettings.pageGap)};
-      --page-margin-top: ${escapeCss(pageSettings.marginTop)};
-      --page-margin-right: ${escapeCss(pageSettings.marginRight)};
-      --page-margin-bottom: ${escapeCss(pageSettings.marginBottom)};
-      --page-margin-left: ${escapeCss(pageSettings.marginLeft)};
-      --page-header-height: ${escapeCss(pageSettings.headerHeight)};
-      --page-footer-height: ${escapeCss(pageSettings.footerHeight)};
-      --page-background: ${escapeCss(theme.pageBackground)};
-      --surface-background: ${escapeCss(theme.surfaceBackground)};
-      --panel-background: ${escapeCss(theme.panelBackground)};
-      --section-background: ${escapeCss(theme.sectionBackground)};
-      --section-text: ${escapeCss(theme.sectionText)};
-      --primary: ${escapeCss(theme.primary)};
-      --primary-text: ${escapeCss(theme.primaryText)};
-      --text-color: ${escapeCss(theme.text)};
-      --muted-text: ${escapeCss(theme.mutedText)};
-      --label-text: ${escapeCss(theme.labelText)};
-      --border-color: ${escapeCss(theme.border)};
-      --input-background: ${escapeCss(theme.inputBackground)};
-      --input-text: ${escapeCss(theme.inputText)};
-      --focus-color: ${escapeCss(theme.focus)};
-      --required-color: ${escapeCss(theme.required)};
-      --error-color: ${escapeCss(theme.error)};
-      --note-background: ${escapeCss(theme.noteBackground)};
-      --note-border: ${escapeCss(theme.noteBorder)};
-      --link-color: ${escapeCss(theme.link)};
-      --radius: ${escapeCss(theme.radius)};
-      --heading-font: ${theme.headingFont};
-      --body-font: ${theme.bodyFont};
-      --form-row-gap: ${escapeCss(formLayout.rowGap)};
+      --page-width: ${safePageSettings.orientation === 'portrait' ? '210mm' : '297mm'};
+      --page-height: ${safePageSettings.orientation === 'portrait' ? '297mm' : '210mm'};
+      --page-gap: ${escapeCss(safePageSettings.pageGap)};
+      --page-margin-top: ${escapeCss(safePageSettings.marginTop)};
+      --page-margin-right: ${escapeCss(safePageSettings.marginRight)};
+      --page-margin-bottom: ${escapeCss(safePageSettings.marginBottom)};
+      --page-margin-left: ${escapeCss(safePageSettings.marginLeft)};
+      --page-header-height: ${escapeCss(safePageSettings.headerHeight)};
+      --page-footer-height: ${escapeCss(safePageSettings.footerHeight)};
+      --page-background: ${escapeCss(safeTheme.pageBackground)};
+      --surface-background: ${escapeCss(safeTheme.surfaceBackground)};
+      --panel-background: ${escapeCss(safeTheme.panelBackground)};
+      --section-background: ${escapeCss(safeTheme.sectionBackground)};
+      --section-text: ${escapeCss(safeTheme.sectionText)};
+      --primary: ${escapeCss(safeTheme.primary)};
+      --primary-text: ${escapeCss(safeTheme.primaryText)};
+      --text-color: ${escapeCss(safeTheme.text)};
+      --muted-text: ${escapeCss(safeTheme.mutedText)};
+      --label-text: ${escapeCss(safeTheme.labelText)};
+      --border-color: ${escapeCss(safeTheme.border)};
+      --input-background: ${escapeCss(safeTheme.inputBackground)};
+      --input-text: ${escapeCss(safeTheme.inputText)};
+      --focus-color: ${escapeCss(safeTheme.focus)};
+      --required-color: ${escapeCss(safeTheme.required)};
+      --error-color: ${escapeCss(safeTheme.error)};
+      --note-background: ${escapeCss(safeTheme.noteBackground)};
+      --note-border: ${escapeCss(safeTheme.noteBorder)};
+      --link-color: ${escapeCss(safeTheme.link)};
+      --radius: ${escapeCss(safeTheme.radius)};
+      --heading-font: ${safeTheme.headingFont};
+      --body-font: ${safeTheme.bodyFont};
+      --form-row-gap: ${escapeCss(safeFormLayout.rowGap)};
     }
 
     * {
@@ -558,7 +574,7 @@ export function buildFormDocument({
     }`}
 
     @page {
-      size: ${pageSettings.size} ${pageSettings.orientation};
+      size: ${safePageSettings.size} ${safePageSettings.orientation};
       margin: 0;
     }
 
@@ -586,7 +602,7 @@ export function buildFormDocument({
   </style>
 </head>
 <body>
-  <main class="document-stack" role="main" aria-label="${escapeAttribute(title)} printable form">
+  <main class="document-stack" role="main" aria-label="${escapeAttribute(safeTitle)} printable form">
     ${pagesMarkup}
   </main>
 </body>
@@ -601,7 +617,10 @@ export function buildPagePlan({
   pageOverrides,
   formLayout
 }: BuildPagePlanOptions): PlannedPage[] {
-  const capacity = estimatePageCapacity(pageSettings);
+  const safeTitle = title.trim() || 'Untitled Form';
+  const safePageSettings = normalizePageSettingsForRender(pageSettings);
+  const safeFormLayout = normalizeFormLayoutForRender(formLayout);
+  const capacity = estimatePageCapacity(safePageSettings);
   const estimatedPages: EstimatedPage[] = [];
   let currentPage = createEstimatedPage(1);
 
@@ -612,8 +631,8 @@ export function buildPagePlan({
       continue;
     }
 
-    const blockEstimate = estimateBlockUnits(block, layoutMode, formLayout);
-    if (pageSettings.autoPaginate && currentPage.blocks.length > 0 && currentPage.estimatedUsage + blockEstimate > capacity) {
+    const blockEstimate = estimateBlockUnits(block, layoutMode, safeFormLayout);
+    if (safePageSettings.autoPaginate && currentPage.blocks.length > 0 && currentPage.estimatedUsage + blockEstimate > capacity) {
       estimatedPages.push(currentPage);
       currentPage = createEstimatedPage(currentPage.pageNumber + 1);
     }
@@ -632,8 +651,8 @@ export function buildPagePlan({
     return {
       pageNumber: page.pageNumber,
       blocks: page.blocks,
-      header: resolvePageRegion(pageSettings.defaultHeader, override, 'header', page.pageNumber, title),
-      footer: resolvePageRegion(pageSettings.defaultFooter, override, 'footer', page.pageNumber, title),
+      header: resolvePageRegion(safePageSettings.defaultHeader, override, 'header', page.pageNumber, safeTitle),
+      footer: resolvePageRegion(safePageSettings.defaultFooter, override, 'footer', page.pageNumber, safeTitle),
       estimatedCapacity: capacity,
       estimatedUsage: page.estimatedUsage
     };
@@ -641,11 +660,12 @@ export function buildPagePlan({
 }
 
 export function resolveFieldLayout(block: FieldBlock, formLayout: FormLayoutSettings): ResolvedFieldLayout {
+  const safeFormLayout = normalizeFormLayoutForRender(formLayout);
   return {
-    mode: block.alignmentMode === 'inherit' ? formLayout.defaultFieldLayout : block.alignmentMode,
-    labelWidth: block.labelWidth || formLayout.defaultLabelWidth,
-    labelAlign: resolveHorizontalAlign(block.labelAlign, formLayout.defaultLabelAlign),
-    verticalAlign: resolveVerticalAlign(block.verticalAlign, formLayout.defaultVerticalAlign)
+    mode: block.alignmentMode === 'inherit' ? safeFormLayout.defaultFieldLayout : block.alignmentMode,
+    labelWidth: normalizeNumberInRange(block.labelWidth, safeFormLayout.defaultLabelWidth, 20, 48),
+    labelAlign: resolveHorizontalAlign(block.labelAlign, safeFormLayout.defaultLabelAlign),
+    verticalAlign: resolveVerticalAlign(block.verticalAlign, safeFormLayout.defaultVerticalAlign)
   };
 }
 
@@ -699,8 +719,9 @@ function renderPageRegion(
   ].filter(Boolean);
 
   const dividerClass = region.divider ? (kind === 'header' ? 'with-divider' : 'with-divider footer-divider') : '';
-  const logoMarkup = region.logoUrl.trim()
-    ? `<img class="page-region-logo" src="${escapeAttribute(region.logoUrl)}" alt="" />`
+  const safeLogoUrl = normalizeUrl(region.logoUrl, { allowRelative: true, allowDataImage: true });
+  const logoMarkup = safeLogoUrl
+    ? `<img class="page-region-logo" src="${escapeAttribute(safeLogoUrl)}" alt="" />`
     : '';
   const textMarkup = region.eyebrow.trim() || region.title.trim() || region.body.trim()
     ? `<div class="page-region-copy">
@@ -794,9 +815,15 @@ function renderStaticLabelBlock(block: StaticLabelBlock): string {
 }
 
 function renderLinkBlock(block: LinkBlock): string {
+  const safeHref = normalizeUrl(block.href, { allowRelative: true, allowedProtocols: ['http:', 'https:', 'mailto:', 'tel:'] });
+  const linkText = block.text.trim() || 'Learn more';
+  if (!safeHref) {
+    return `<p class="link-block block-span-full"><span class="inline-link">${escapeHtml(linkText)}</span></p>`;
+  }
+
   const rel = block.openInNewTab ? ' rel="noreferrer noopener"' : '';
   const target = block.openInNewTab ? ' target="_blank"' : '';
-  return `<p class="link-block block-span-full"><a href="${escapeAttribute(block.href)}"${target}${rel}>${escapeHtml(block.text)}</a></p>`;
+  return `<p class="link-block block-span-full"><a href="${escapeAttribute(safeHref)}"${target}${rel}>${escapeHtml(linkText)}</a></p>`;
 }
 
 function renderPageBreakPlaceholder(_block: PageBreakBlock): string {
@@ -1114,4 +1141,75 @@ function escapeCss(value: string): string {
 
 function escapeForThymeleaf(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function normalizeThemeForRender(theme: ThemePreset): ThemePreset {
+  return {
+    id: typeof theme.id === 'string' && theme.id ? theme.id : DEFAULT_THEME.id,
+    name: normalizeString(theme.name, DEFAULT_THEME.name),
+    pageBackground: normalizeCssColor(theme.pageBackground, DEFAULT_THEME.pageBackground),
+    surfaceBackground: normalizeCssColor(theme.surfaceBackground, DEFAULT_THEME.surfaceBackground),
+    panelBackground: normalizeCssColor(theme.panelBackground, DEFAULT_THEME.panelBackground),
+    sectionBackground: normalizeCssColor(theme.sectionBackground, DEFAULT_THEME.sectionBackground),
+    sectionText: normalizeCssColor(theme.sectionText, DEFAULT_THEME.sectionText),
+    primary: normalizeCssColor(theme.primary, DEFAULT_THEME.primary),
+    primaryText: normalizeCssColor(theme.primaryText, DEFAULT_THEME.primaryText),
+    text: normalizeCssColor(theme.text, DEFAULT_THEME.text),
+    mutedText: normalizeCssColor(theme.mutedText, DEFAULT_THEME.mutedText),
+    labelText: normalizeCssColor(theme.labelText, DEFAULT_THEME.labelText),
+    border: normalizeCssColor(theme.border, DEFAULT_THEME.border),
+    inputBackground: normalizeCssColor(theme.inputBackground, DEFAULT_THEME.inputBackground),
+    inputText: normalizeCssColor(theme.inputText, DEFAULT_THEME.inputText),
+    focus: normalizeCssColor(theme.focus, DEFAULT_THEME.focus),
+    required: normalizeCssColor(theme.required, DEFAULT_THEME.required),
+    error: normalizeCssColor(theme.error, DEFAULT_THEME.error),
+    noteBackground: normalizeCssColor(theme.noteBackground, DEFAULT_THEME.noteBackground),
+    noteBorder: normalizeCssColor(theme.noteBorder, DEFAULT_THEME.noteBorder),
+    link: normalizeCssColor(theme.link, DEFAULT_THEME.link),
+    radius: normalizeCssLength(theme.radius, DEFAULT_THEME.radius),
+    headingFont: normalizeFontChoice(theme.headingFont, DEFAULT_THEME.headingFont, FONT_CHOICES),
+    bodyFont: normalizeFontChoice(theme.bodyFont, DEFAULT_THEME.bodyFont, FONT_CHOICES)
+  };
+}
+
+function normalizeFormLayoutForRender(formLayout: FormLayoutSettings): FormLayoutSettings {
+  return {
+    defaultFieldLayout: formLayout.defaultFieldLayout === 'stacked' ? 'stacked' : DEFAULT_FORM_LAYOUT.defaultFieldLayout,
+    defaultLabelWidth: normalizeNumberInRange(formLayout.defaultLabelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth, 20, 48),
+    defaultLabelAlign: formLayout.defaultLabelAlign === 'end' ? 'end' : DEFAULT_FORM_LAYOUT.defaultLabelAlign,
+    defaultVerticalAlign: formLayout.defaultVerticalAlign === 'start' ? 'start' : DEFAULT_FORM_LAYOUT.defaultVerticalAlign,
+    rowGap: normalizeCssLength(formLayout.rowGap, DEFAULT_FORM_LAYOUT.rowGap)
+  };
+}
+
+function normalizePageSettingsForRender(pageSettings: PageSettings): PageSettings {
+  return {
+    size: 'A4',
+    orientation: pageSettings.orientation === 'landscape' ? 'landscape' : DEFAULT_PAGE_SETTINGS.orientation,
+    marginTop: normalizeCssLength(pageSettings.marginTop, DEFAULT_PAGE_SETTINGS.marginTop),
+    marginRight: normalizeCssLength(pageSettings.marginRight, DEFAULT_PAGE_SETTINGS.marginRight),
+    marginBottom: normalizeCssLength(pageSettings.marginBottom, DEFAULT_PAGE_SETTINGS.marginBottom),
+    marginLeft: normalizeCssLength(pageSettings.marginLeft, DEFAULT_PAGE_SETTINGS.marginLeft),
+    pageGap: normalizeCssLength(pageSettings.pageGap, DEFAULT_PAGE_SETTINGS.pageGap),
+    headerHeight: normalizeCssLength(pageSettings.headerHeight, DEFAULT_PAGE_SETTINGS.headerHeight),
+    footerHeight: normalizeCssLength(pageSettings.footerHeight, DEFAULT_PAGE_SETTINGS.footerHeight),
+    autoPaginate: pageSettings.autoPaginate,
+    defaultHeader: normalizePageRegionForRender(pageSettings.defaultHeader, DEFAULT_PAGE_SETTINGS.defaultHeader),
+    defaultFooter: normalizePageRegionForRender(pageSettings.defaultFooter, DEFAULT_PAGE_SETTINGS.defaultFooter)
+  };
+}
+
+function normalizePageRegionForRender(region: PageRegionConfig, fallback: PageRegionConfig): PageRegionConfig {
+  return {
+    enabled: region.enabled,
+    eyebrow: normalizeString(region.eyebrow, fallback.eyebrow),
+    title: normalizeString(region.title, fallback.title),
+    body: normalizeString(region.body, fallback.body),
+    metaText: normalizeString(region.metaText, fallback.metaText),
+    logoUrl: normalizeUrl(region.logoUrl, { allowRelative: true, allowDataImage: true }),
+    showPageNumber: region.showPageNumber,
+    showDate: region.showDate,
+    divider: region.divider,
+    align: region.align === 'center' || region.align === 'end' ? region.align : fallback.align
+  };
 }
