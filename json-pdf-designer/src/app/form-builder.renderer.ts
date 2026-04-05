@@ -404,22 +404,55 @@ export function buildFormDocument({
     }
 
     .field-label-shell {
-      width: 100%;
+      width: fit-content;
+      max-width: 100%;
       min-width: 0;
-      display: grid;
-      align-items: start;
+      display: inline-block;
+      position: relative;
+      overflow: visible;
     }
 
     .field-label-shell.has-marker {
-      grid-template-columns: 16px minmax(0, 1fr);
-      column-gap: 8px;
+      padding-left: 0;
     }
 
     .field-label-marker {
+      position: absolute;
+      right: calc(100% + 0.2rem);
+      top: 0.08em;
       color: var(--required-color);
       font-weight: 900;
-      line-height: 1.15;
+      line-height: 1;
       text-align: left;
+    }
+
+    .field-label-cell.center .field-label-shell {
+      display: inline-grid;
+      grid-template-columns: 0.72rem auto 0.72rem;
+      column-gap: 0.18rem;
+      align-items: center;
+    }
+
+    .field-label-cell.center .field-label-shell::before,
+    .field-label-cell.center .field-label-shell::after {
+      content: '';
+      width: 0.72rem;
+    }
+
+    .field-label-cell.center .field-label-shell.has-marker::before {
+      content: '*';
+      color: var(--required-color);
+      font-weight: 900;
+      line-height: 1;
+      text-align: left;
+    }
+
+    .field-label-cell.center .field-label-shell .field-label-marker {
+      display: none;
+    }
+
+    .field-label-cell.center .field-label-shell .field-label-text {
+      grid-column: 2;
     }
 
     .field-label-text {
