@@ -15,8 +15,9 @@ export type FieldControlType =
   | 'checkbox-group';
 export type FieldAlignmentMode = 'inherit' | 'inline' | 'stacked';
 export type ResolvedFieldAlignmentMode = 'inline' | 'stacked';
-export type HorizontalAlign = 'inherit' | 'start' | 'end';
-export type ResolvedHorizontalAlign = 'start' | 'end';
+export type HorizontalAlign = 'inherit' | 'start' | 'center' | 'end';
+export type ResolvedHorizontalAlign = 'start' | 'center' | 'end';
+export type ControlAlign = 'start' | 'center' | 'end';
 export type VerticalAlign = 'inherit' | 'start' | 'center';
 export type ResolvedVerticalAlign = 'start' | 'center';
 export type PageOrientation = 'portrait' | 'landscape';
@@ -135,6 +136,8 @@ export interface FieldBlock extends BaseBlock {
   labelWidth: number;
   labelAlign: HorizontalAlign;
   verticalAlign: VerticalAlign;
+  controlAlign: ControlAlign;
+  controlWidth: number;
 }
 
 export interface SectionBlock extends BaseBlock {
@@ -388,11 +391,19 @@ export const RESOLVED_FIELD_ALIGNMENT_OPTIONS: Array<SelectOption<ResolvedFieldA
 export const LABEL_ALIGN_OPTIONS: Array<SelectOption<HorizontalAlign>> = [
   { value: 'inherit', label: 'Use global setting' },
   { value: 'start', label: 'Align left' },
+  { value: 'center', label: 'Align center' },
   { value: 'end', label: 'Align right' }
 ];
 
 export const RESOLVED_LABEL_ALIGN_OPTIONS: Array<SelectOption<ResolvedHorizontalAlign>> = [
   { value: 'start', label: 'Align left' },
+  { value: 'center', label: 'Align center' },
+  { value: 'end', label: 'Align right' }
+];
+
+export const CONTROL_ALIGN_OPTIONS: Array<SelectOption<ControlAlign>> = [
+  { value: 'start', label: 'Align left' },
+  { value: 'center', label: 'Align center' },
   { value: 'end', label: 'Align right' }
 ];
 

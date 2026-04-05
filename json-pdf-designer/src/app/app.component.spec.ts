@@ -100,7 +100,7 @@ describe('AppComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const previewFrame = compiled.querySelector('iframe[title="Live form preview"]');
 
-    expect(previewFrame?.getAttribute('sandbox')).toBe('');
+    expect(previewFrame?.getAttribute('sandbox')).toBe('allow-same-origin');
     expect(previewFrame?.getAttribute('referrerpolicy')).toBe('no-referrer');
   });
 
@@ -118,11 +118,21 @@ describe('AppComponent', () => {
     expect(previewFrame).toBeTruthy();
     expect(previewFrame?.srcdoc).toContain('<!DOCTYPE html>');
     expect(previewFrame?.srcdoc).toContain('Accessible Application Form');
+    expect(previewFrame?.srcdoc).toContain('data-block-id=');
 
     app.setPreviewMode('export');
     fixture.detectChanges();
 
     expect(previewFrame?.srcdoc).toContain('th:value=');
+  });
+
+  it('keeps editor metadata out of the downloaded thymeleaf export', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(app.samplePreviewDocument).toContain('data-block-id=');
+    expect(app.thymeleafMarkup).not.toContain('data-block-id=');
   });
 
   it('pins the preview studio to the viewport instead of flowing to the bottom of the page', () => {

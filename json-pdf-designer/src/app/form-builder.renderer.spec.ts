@@ -1,5 +1,5 @@
 import { buildFormDocument } from './form-builder.renderer';
-import { DEFAULT_FORM_LAYOUT, DEFAULT_PAGE_SETTINGS, DEFAULT_THEME, LinkBlock } from './form-builder.models';
+import { DEFAULT_FORM_LAYOUT, DEFAULT_PAGE_SETTINGS, DEFAULT_THEME, FieldBlock, LinkBlock } from './form-builder.models';
 
 describe('form-builder.renderer', () => {
   it('falls back to safe theme and layout values when unsafe CSS-like input is provided', () => {
@@ -87,5 +87,63 @@ describe('form-builder.renderer', () => {
 
     expect(html).toContain('href="mailto:support@example.com"');
     expect(html).toContain('>Email support</a>');
+  });
+
+  it('renders stacked labels without marker indentation and applies custom field box alignment', () => {
+    const emailField: FieldBlock = {
+      id: 'field-email',
+      kind: 'field',
+      source: 'json',
+      fieldKey: 'email',
+      bindingKey: 'email',
+      width: 'half',
+      label: 'Email',
+      controlType: 'email',
+      placeholder: 'Enter email',
+      helperText: '',
+      required: false,
+      hideLabel: false,
+      inline: false,
+      defaultValue: 'elara.quinn@example.com',
+      options: [],
+      validation: {
+        minLength: '',
+        maxLength: '',
+        min: '',
+        max: '',
+        pattern: '',
+        customError: ''
+      },
+      alignmentMode: 'stacked',
+      labelWidth: 34,
+      labelAlign: 'center',
+      verticalAlign: 'start',
+      controlAlign: 'end',
+      controlWidth: 72
+    };
+
+    const html = buildFormDocument({
+      blocks: [emailField],
+      jsonFields: [
+        {
+          key: 'email',
+          label: 'Email',
+          preview: 'elara.quinn@example.com',
+          type: 'string',
+          value: 'elara.quinn@example.com'
+        }
+      ],
+      layoutMode: 'two-column',
+      theme: DEFAULT_THEME,
+      title: 'Alignment Demo',
+      useThymeleaf: false,
+      formLayout: DEFAULT_FORM_LAYOUT,
+      pageSettings: DEFAULT_PAGE_SETTINGS,
+      pageOverrides: []
+    });
+
+    expect(html).toContain('--field-control-justify:end; --field-control-width:72%;');
+    expect(html).toContain('<span class="field-label-shell">');
+    expect(html).not.toContain('field-label-shell has-marker');
   });
 });

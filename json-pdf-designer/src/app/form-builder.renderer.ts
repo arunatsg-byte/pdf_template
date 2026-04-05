@@ -1,6 +1,7 @@
 import {
   BuilderBlock,
   ChoiceOption,
+  ControlAlign,
   DEFAULT_FORM_LAYOUT,
   DEFAULT_PAGE_SETTINGS,
   DEFAULT_THEME,
@@ -56,6 +57,7 @@ interface BuildFormDocumentOptions {
   pageSettings: PageSettings;
   pageOverrides: PageOverride[];
   lockDesktopLayout?: boolean;
+  includeEditorMetadata?: boolean;
 }
 
 interface BuildPagePlanOptions {
@@ -72,6 +74,8 @@ interface ResolvedFieldLayout {
   labelWidth: number;
   labelAlign: ResolvedHorizontalAlign;
   verticalAlign: ResolvedVerticalAlign;
+  controlAlign: ControlAlign;
+  controlWidth: number;
 }
 
 interface EstimatedPage {
@@ -90,7 +94,8 @@ export function buildFormDocument({
   formLayout,
   pageSettings,
   pageOverrides,
-  lockDesktopLayout = false
+  lockDesktopLayout = false,
+  includeEditorMetadata = false
 }: BuildFormDocumentOptions): string {
   const safeTitle = title.trim() || 'Untitled Form';
   const safeTheme = normalizeThemeForRender(theme);
@@ -109,11 +114,11 @@ export function buildFormDocument({
   const pagesMarkup = pagePlan
     .map((page) => {
       const pageBlocks = page.blocks
-        .map((block) => renderBlock(block, fieldMap, layoutMode, useThymeleaf, safeFormLayout))
+        .map((block) => renderBlock(block, fieldMap, layoutMode, useThymeleaf, safeFormLayout, includeEditorMetadata))
         .filter(Boolean)
         .join('\n');
 
-      return `<section class="print-page" aria-label="Page ${page.pageNumber}">
+      return `<section class="print-page" aria-label="Page ${page.pageNumber}"${includeEditorMetadata ? ` data-page-number="${page.pageNumber}"` : ''}>
   ${renderPageRegion(page.header, page.pageNumber, pagePlan.length, 'header')}
   <div class="page-content">
     <div class="form-grid ${layoutMode === 'two-column' ? 'two-column' : 'single-column'}">
@@ -402,9 +407,12 @@ export function buildFormDocument({
       width: 100%;
       min-width: 0;
       display: grid;
+      align-items: start;
+    }
+
+    .field-label-shell.has-marker {
       grid-template-columns: 16px minmax(0, 1fr);
       column-gap: 8px;
-      align-items: start;
     }
 
     .field-label-marker {
@@ -423,6 +431,11 @@ export function buildFormDocument({
       text-align: left;
     }
 
+    .field-label-cell.center {
+      justify-items: center;
+      text-align: center;
+    }
+
     .field-label-cell.end {
       justify-items: end;
       text-align: right;
@@ -432,12 +445,24 @@ export function buildFormDocument({
       text-align: left;
     }
 
+    .field-label-cell.center .field-label-text {
+      text-align: center;
+    }
+
     .field-label-cell.end .field-label-text {
       text-align: right;
     }
 
     .field-control-cell {
       min-width: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .field-control-shell {
+      width: min(100%, var(--field-control-width));
+      min-width: 0;
+      justify-self: var(--field-control-justify);
       display: grid;
       gap: 8px;
     }
@@ -672,7 +697,9 @@ export function resolveFieldLayout(block: FieldBlock, formLayout: FormLayoutSett
     mode: block.alignmentMode === 'inherit' ? safeFormLayout.defaultFieldLayout : block.alignmentMode,
     labelWidth: normalizeNumberInRange(block.labelWidth, safeFormLayout.defaultLabelWidth, 20, 48),
     labelAlign: resolveHorizontalAlign(block.labelAlign, safeFormLayout.defaultLabelAlign),
-    verticalAlign: resolveVerticalAlign(block.verticalAlign, safeFormLayout.defaultVerticalAlign)
+    verticalAlign: resolveVerticalAlign(block.verticalAlign, safeFormLayout.defaultVerticalAlign),
+    controlAlign: resolveControlAlign(block.controlAlign),
+    controlWidth: normalizeNumberInRange(block.controlWidth, 100, 50, 100)
   };
 }
 
@@ -749,25 +776,26 @@ function renderBlock(
   fieldMap: Map<string, JsonField>,
   layoutMode: LayoutMode,
   useThymeleaf: boolean,
-  formLayout: FormLayoutSettings
+  formLayout: FormLayoutSettings,
+  includeEditorMetadata: boolean
 ): string {
   switch (block.kind) {
     case 'field':
-      return renderFieldBlock(block, fieldMap, layoutMode, useThymeleaf, formLayout);
+      return renderFieldBlock(block, fieldMap, layoutMode, useThymeleaf, formLayout, includeEditorMetadata);
     case 'section':
-      return renderSectionBlock(block);
+      return renderSectionBlock(block, includeEditorMetadata);
     case 'paragraph':
-      return renderParagraphBlock(block);
+      return renderParagraphBlock(block, includeEditorMetadata);
     case 'note':
-      return renderNoteBlock(block);
+      return renderNoteBlock(block, includeEditorMetadata);
     case 'declaration':
-      return renderDeclarationBlock(block, useThymeleaf);
+      return renderDeclarationBlock(block, useThymeleaf, includeEditorMetadata);
     case 'divider':
-      return renderDividerBlock(block);
+      return renderDividerBlock(block, includeEditorMetadata);
     case 'static-label':
-      return renderStaticLabelBlock(block);
+      return renderStaticLabelBlock(block, includeEditorMetadata);
     case 'link':
-      return renderLinkBlock(block);
+      return renderLinkBlock(block, includeEditorMetadata);
     case 'page-break':
       return renderPageBreakPlaceholder(block);
     default:
@@ -775,22 +803,30 @@ function renderBlock(
   }
 }
 
-function renderSectionBlock(block: SectionBlock): string {
-  return `<section class="section-block block-span-full" aria-label="${escapeAttribute(block.title)}">
+function renderEditorBlockMetadata(blockId: string, kind: BuilderBlock['kind'], includeEditorMetadata: boolean): string {
+  return includeEditorMetadata ? ` data-block-id="${escapeAttribute(blockId)}" data-block-kind="${kind}"` : '';
+}
+
+function renderEditorPartMetadata(part: 'label' | 'control', includeEditorMetadata: boolean): string {
+  return includeEditorMetadata ? ` data-editor-part="${part}"` : '';
+}
+
+function renderSectionBlock(block: SectionBlock, includeEditorMetadata: boolean): string {
+  return `<section class="section-block block-span-full" aria-label="${escapeAttribute(block.title)}"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}>
   <h2>${escapeHtml(block.title)}</h2>
   ${block.subtitle.trim() ? `<p>${formatTextContent(block.subtitle)}</p>` : ''}
 </section>`;
 }
 
-function renderParagraphBlock(block: ParagraphBlock): string {
-  return `<p class="paragraph-block ${widthClass(block.width)}">${formatTextContent(block.content)}</p>`;
+function renderParagraphBlock(block: ParagraphBlock, includeEditorMetadata: boolean): string {
+  return `<p class="paragraph-block ${widthClass(block.width)}"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}>${formatTextContent(block.content)}</p>`;
 }
 
-function renderNoteBlock(block: NoteBlock): string {
-  return `<aside class="note-block ${block.emphasis} block-span-full" role="note">${formatTextContent(block.content)}</aside>`;
+function renderNoteBlock(block: NoteBlock, includeEditorMetadata: boolean): string {
+  return `<aside class="note-block ${block.emphasis} block-span-full" role="note"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}>${formatTextContent(block.content)}</aside>`;
 }
 
-function renderDeclarationBlock(block: DeclarationBlock, useThymeleaf: boolean): string {
+function renderDeclarationBlock(block: DeclarationBlock, useThymeleaf: boolean, includeEditorMetadata: boolean): string {
   const id = `declaration-${slugify(block.name || block.id)}-${block.id}`;
   const checkedAttribute = useThymeleaf
     ? ` th:checked="\${payload['${escapeForThymeleaf(block.name || block.id)}']}"`
@@ -803,7 +839,7 @@ function renderDeclarationBlock(block: DeclarationBlock, useThymeleaf: boolean):
     : '';
   const describedBy = block.helperText.trim() ? ` aria-describedby="${id}-help"` : '';
 
-  return `<div class="declaration-block block-span-full">
+  return `<div class="declaration-block block-span-full"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}>
   <label class="checkbox-row" for="${id}">
     <input id="${id}" name="${escapeAttribute(block.name || slugify(block.content) || block.id)}" type="checkbox"${checkedAttribute}${requiredAttribute}${describedBy} />
     <span class="declaration-text">${block.required ? '<span class="required-indicator" aria-hidden="true">*</span>' : ''}${formatTextContent(block.content)}</span>
@@ -812,25 +848,25 @@ function renderDeclarationBlock(block: DeclarationBlock, useThymeleaf: boolean):
 </div>`;
 }
 
-function renderDividerBlock(block: DividerBlock): string {
-  return `<div class="divider-block ${block.style} block-span-full" role="separator" aria-hidden="true"></div>`;
+function renderDividerBlock(block: DividerBlock, includeEditorMetadata: boolean): string {
+  return `<div class="divider-block ${block.style} block-span-full" role="separator" aria-hidden="true"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}></div>`;
 }
 
-function renderStaticLabelBlock(block: StaticLabelBlock): string {
+function renderStaticLabelBlock(block: StaticLabelBlock, includeEditorMetadata: boolean): string {
   const tag = block.tone === 'strong' ? 'strong' : 'span';
-  return `<p class="static-label-block ${widthClass(block.width)}"><${tag}>${formatTextContent(block.content)}</${tag}></p>`;
+  return `<p class="static-label-block ${widthClass(block.width)}"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}><${tag}>${formatTextContent(block.content)}</${tag}></p>`;
 }
 
-function renderLinkBlock(block: LinkBlock): string {
+function renderLinkBlock(block: LinkBlock, includeEditorMetadata: boolean): string {
   const safeHref = normalizeUrl(block.href, { allowRelative: true, allowedProtocols: ['http:', 'https:', 'mailto:', 'tel:'] });
   const linkText = block.text.trim() || 'Learn more';
   if (!safeHref) {
-    return `<p class="link-block block-span-full"><span class="inline-link">${escapeHtml(linkText)}</span></p>`;
+    return `<p class="link-block block-span-full"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}><span class="inline-link">${escapeHtml(linkText)}</span></p>`;
   }
 
   const rel = block.openInNewTab ? ' rel="noreferrer noopener"' : '';
   const target = block.openInNewTab ? ' target="_blank"' : '';
-  return `<p class="link-block block-span-full"><a href="${escapeAttribute(safeHref)}"${target}${rel}>${escapeHtml(linkText)}</a></p>`;
+  return `<p class="link-block block-span-full"${renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata)}><a href="${escapeAttribute(safeHref)}"${target}${rel}>${escapeHtml(linkText)}</a></p>`;
 }
 
 function renderPageBreakPlaceholder(_block: PageBreakBlock): string {
@@ -842,7 +878,8 @@ function renderFieldBlock(
   fieldMap: Map<string, JsonField>,
   layoutMode: LayoutMode,
   useThymeleaf: boolean,
-  formLayout: FormLayoutSettings
+  formLayout: FormLayoutSettings,
+  includeEditorMetadata: boolean
 ): string {
   const bindingKey = block.bindingKey.trim() || block.fieldKey || block.id;
   const sourceField = block.fieldKey ? fieldMap.get(block.fieldKey) : undefined;
@@ -860,20 +897,25 @@ function renderFieldBlock(
   const wrapperClass = `field-block ${widthClass(width)}`;
   const layout = resolveFieldLayout(block, formLayout);
   const fieldClass = `${wrapperClass} ${layout.mode}-mode`;
-  const layoutStyle = `style="--field-label-width:${layout.labelWidth}; --field-row-align:${layout.verticalAlign === 'center' ? 'center' : 'start'};"`;
+  const layoutStyle = `style="--field-label-width:${layout.labelWidth}; --field-row-align:${layout.verticalAlign === 'center' ? 'center' : 'start'}; --field-control-justify:${layout.controlAlign}; --field-control-width:${layout.controlWidth}%;"`;
   const labelClass = `field-label-cell ${layout.labelAlign}`;
+  const blockMetadata = renderEditorBlockMetadata(block.id, block.kind, includeEditorMetadata);
+  const labelMetadata = renderEditorPartMetadata('label', includeEditorMetadata);
+  const controlMetadata = renderEditorPartMetadata('control', includeEditorMetadata);
 
   if (block.controlType === 'radio' || block.controlType === 'checkbox-group') {
     const optionsMarkup = renderChoiceOptions(block.controlType, block.options, expression, previewValue, fieldId, bindingKey, useThymeleaf);
     const legendMarkup = block.hideLabel
       ? `<span class="visually-hidden">${escapeHtml(block.label)}</span>`
       : renderFieldLabelShell(block.label, block.required);
-    return `<fieldset class="choice-group ${fieldClass}" ${layoutStyle}>
+    return `<fieldset class="choice-group ${fieldClass}" ${layoutStyle}${blockMetadata}>
   <div class="field-row">
-    <legend class="${labelClass}">${legendMarkup}</legend>
+    <legend class="${labelClass}"${labelMetadata}>${legendMarkup}</legend>
     <div class="field-control-cell">
-      ${helperMarkup}
-      <div class="choice-options ${block.inline ? 'inline' : ''}">${optionsMarkup}</div>
+      <div class="field-control-shell"${controlMetadata}>
+        ${helperMarkup}
+        <div class="choice-options ${block.inline ? 'inline' : ''}">${optionsMarkup}</div>
+      </div>
     </div>
   </div>
 </fieldset>`;
@@ -886,16 +928,18 @@ function renderFieldBlock(
         ? ' checked'
         : '';
     const checkboxLabelMarkup = block.hideLabel
-      ? `<span class="visually-hidden">${escapeHtml(block.label)}</span>`
-      : `<label class="${labelClass}" for="${fieldId}">${renderFieldLabelShell(block.label, block.required)}</label>`;
-    return `<div class="${fieldClass}" ${layoutStyle}>
+      ? `<span class="visually-hidden"${labelMetadata}>${escapeHtml(block.label)}</span>`
+      : `<label class="${labelClass}" for="${fieldId}"${labelMetadata}>${renderFieldLabelShell(block.label, block.required)}</label>`;
+    return `<div class="${fieldClass}" ${layoutStyle}${blockMetadata}>
   <div class="field-row">
     ${checkboxLabelMarkup}
     <div class="field-control-cell">
-      <div class="checkbox-control">
-        <input id="${fieldId}" name="${escapeAttribute(bindingKey)}" type="checkbox"${checkedAttribute}${block.required ? ' required aria-required="true"' : ''}${describedBy}${dataError} />
+      <div class="field-control-shell"${controlMetadata}>
+        <div class="checkbox-control">
+          <input id="${fieldId}" name="${escapeAttribute(bindingKey)}" type="checkbox"${checkedAttribute}${block.required ? ' required aria-required="true"' : ''}${describedBy}${dataError} />
+        </div>
+        ${helperMarkup}
       </div>
-      ${helperMarkup}
     </div>
   </div>
 </div>`;
@@ -906,14 +950,16 @@ function renderFieldBlock(
     : `<label for="${fieldId}">${renderFieldLabelShell(block.label, block.required)}</label>`;
 
   if (block.controlType === 'dropdown') {
-    return `<div class="${fieldClass}" ${layoutStyle}>
+    return `<div class="${fieldClass}" ${layoutStyle}${blockMetadata}>
   <div class="field-row">
-    <div class="${labelClass}">${labelMarkup}</div>
+    <div class="${labelClass}"${labelMetadata}>${labelMarkup}</div>
     <div class="field-control-cell">
-      <select id="${fieldId}" name="${escapeAttribute(bindingKey)}"${describedBy}${block.required ? ' required aria-required="true"' : ''}${dataError}>
-        ${renderSelectOptions(block.options, expression, previewValue, useThymeleaf)}
-      </select>
-      ${helperMarkup}
+      <div class="field-control-shell"${controlMetadata}>
+        <select id="${fieldId}" name="${escapeAttribute(bindingKey)}"${describedBy}${block.required ? ' required aria-required="true"' : ''}${dataError}>
+          ${renderSelectOptions(block.options, expression, previewValue, useThymeleaf)}
+        </select>
+        ${helperMarkup}
+      </div>
     </div>
   </div>
 </div>`;
@@ -922,12 +968,14 @@ function renderFieldBlock(
   if (block.controlType === 'textarea') {
     const content = useThymeleaf ? expression : escapeHtml(previewValue);
     const thymeleafAttribute = useThymeleaf ? ` th:text="${expression}"` : '';
-    return `<div class="${fieldClass}" ${layoutStyle}>
+    return `<div class="${fieldClass}" ${layoutStyle}${blockMetadata}>
   <div class="field-row">
-    <div class="${labelClass}">${labelMarkup}</div>
+    <div class="${labelClass}"${labelMetadata}>${labelMarkup}</div>
     <div class="field-control-cell">
-      <textarea id="${fieldId}" name="${escapeAttribute(bindingKey)}" placeholder="${escapeAttribute(block.placeholder)}"${describedBy}${block.required ? ' required aria-required="true"' : ''}${validationAttributes}${dataError}${thymeleafAttribute}>${content}</textarea>
-      ${helperMarkup}
+      <div class="field-control-shell"${controlMetadata}>
+        <textarea id="${fieldId}" name="${escapeAttribute(bindingKey)}" placeholder="${escapeAttribute(block.placeholder)}"${describedBy}${block.required ? ' required aria-required="true"' : ''}${validationAttributes}${dataError}${thymeleafAttribute}>${content}</textarea>
+        ${helperMarkup}
+      </div>
     </div>
   </div>
 </div>`;
@@ -938,12 +986,14 @@ function renderFieldBlock(
     ? ` th:value="${expression}"`
     : ` value="${escapeAttribute(previewValue)}"`;
 
-  return `<div class="${fieldClass}" ${layoutStyle}>
+  return `<div class="${fieldClass}" ${layoutStyle}${blockMetadata}>
   <div class="field-row">
-    <div class="${labelClass}">${labelMarkup}</div>
+    <div class="${labelClass}"${labelMetadata}>${labelMarkup}</div>
     <div class="field-control-cell">
-      <input id="${fieldId}" name="${escapeAttribute(bindingKey)}" type="${inputType}" placeholder="${escapeAttribute(block.placeholder)}"${valueAttribute}${describedBy}${block.required ? ' required aria-required="true"' : ''}${validationAttributes}${dataError} />
-      ${helperMarkup}
+      <div class="field-control-shell"${controlMetadata}>
+        <input id="${fieldId}" name="${escapeAttribute(bindingKey)}" type="${inputType}" placeholder="${escapeAttribute(block.placeholder)}"${valueAttribute}${describedBy}${block.required ? ' required aria-required="true"' : ''}${validationAttributes}${dataError} />
+        ${helperMarkup}
+      </div>
     </div>
   </div>
 </div>`;
@@ -1010,14 +1060,14 @@ function renderValidationAttributes(block: FieldBlock): string {
 }
 
 function renderFieldLabelShell(label: string, required: boolean): string {
-  return `<span class="field-label-shell">
-    ${renderFieldMarker(required)}
+  return `<span class="field-label-shell${required ? ' has-marker' : ''}">
+    ${required ? renderFieldMarker() : ''}
     <span class="field-label-text">${escapeHtml(label)}</span>
   </span>`;
 }
 
-function renderFieldMarker(required: boolean): string {
-  return `<span class="field-label-marker" aria-hidden="true">${required ? '*' : ''}</span>`;
+function renderFieldMarker(): string {
+  return '<span class="field-label-marker" aria-hidden="true">*</span>';
 }
 
 function buildPreviewValue(block: FieldBlock, sourceField?: JsonField): string {
@@ -1106,6 +1156,10 @@ function resolveHorizontalAlign(value: HorizontalAlign, fallback: ResolvedHorizo
   return value === 'inherit' ? fallback : value;
 }
 
+function resolveControlAlign(value: ControlAlign): ControlAlign {
+  return value === 'center' || value === 'end' ? value : 'start';
+}
+
 function resolveVerticalAlign(value: VerticalAlign, fallback: ResolvedVerticalAlign): ResolvedVerticalAlign {
   return value === 'inherit' ? fallback : value;
 }
@@ -1185,7 +1239,12 @@ function normalizeFormLayoutForRender(formLayout: FormLayoutSettings): FormLayou
   return {
     defaultFieldLayout: formLayout.defaultFieldLayout === 'stacked' ? 'stacked' : DEFAULT_FORM_LAYOUT.defaultFieldLayout,
     defaultLabelWidth: normalizeNumberInRange(formLayout.defaultLabelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth, 20, 48),
-    defaultLabelAlign: formLayout.defaultLabelAlign === 'end' ? 'end' : DEFAULT_FORM_LAYOUT.defaultLabelAlign,
+    defaultLabelAlign:
+      formLayout.defaultLabelAlign === 'center'
+        ? 'center'
+        : formLayout.defaultLabelAlign === 'end'
+          ? 'end'
+          : DEFAULT_FORM_LAYOUT.defaultLabelAlign,
     defaultVerticalAlign: formLayout.defaultVerticalAlign === 'start' ? 'start' : DEFAULT_FORM_LAYOUT.defaultVerticalAlign,
     rowGap: normalizeCssLength(formLayout.rowGap, DEFAULT_FORM_LAYOUT.rowGap)
   };

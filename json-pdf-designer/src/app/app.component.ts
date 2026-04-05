@@ -1,12 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewChecked, Component, ElementRef, HostListener, OnInit, ViewChild } from '@angular/core';
+import { AfterViewChecked, ChangeDetectorRef, Component, ElementRef, HostListener, NgZone, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { buildFormDocument, buildPagePlan, PlannedPage } from './form-builder.renderer';
 import {
   BuilderBlock,
   ChoiceOption,
+  CONTROL_ALIGN_OPTIONS,
   CONTROL_TYPE_OPTIONS,
+  ControlAlign,
   DEFAULT_FORM_LAYOUT,
   DEFAULT_PAGE_SETTINGS,
   DEFAULT_THEME,
@@ -68,6 +70,36 @@ type AppThemeMode = 'light' | 'dark' | 'system';
 type SidePanelTab = 'inspector' | 'html';
 type ResizeHandle = 'left-center' | 'center-right';
 type CopyFeedbackState = 'idle' | 'copied' | 'error';
+type PreviewSnapAlign = 'start' | 'center' | 'end';
+type PreviewDragMode = 'label-align' | 'control-align' | 'label-width';
+
+interface PreviewOverlayState {
+  fieldTop: number;
+  fieldLeft: number;
+  fieldWidth: number;
+  fieldHeight: number;
+  labelCellTop: number;
+  labelCellLeft: number;
+  labelCellWidth: number;
+  labelCellHeight: number;
+  labelShellWidth: number;
+  controlCellTop: number;
+  controlCellLeft: number;
+  controlCellWidth: number;
+  controlCellHeight: number;
+  controlShellTop: number;
+  controlShellLeft: number;
+  controlShellWidth: number;
+  controlShellHeight: number;
+  layoutMode: 'inline' | 'stacked';
+}
+
+interface PreviewDragState {
+  mode: PreviewDragMode;
+  labelAlign: PreviewSnapAlign;
+  controlAlign: PreviewSnapAlign;
+  labelWidth: number;
+}
 
 @Component({
   selector: 'app-root',
@@ -77,6 +109,11 @@ type CopyFeedbackState = 'idle' | 'copied' | 'error';
   styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit, AfterViewChecked {
+  constructor(
+    private readonly cdr: ChangeDetectorRef,
+    private readonly ngZone: NgZone
+  ) {}
+
   @ViewChild('previewFocusFrame') previewFocusFrame?: ElementRef<HTMLIFrameElement>;
   @ViewChild('builderWorkspace') builderWorkspace?: ElementRef<HTMLElement>;
   @ViewChild('settingsPanelAnchor') settingsPanelAnchor?: ElementRef<HTMLElement>;
@@ -87,6 +124,8 @@ export class AppComponent implements OnInit, AfterViewChecked {
   private readonly builderHandleSizePx = 18;
   private readonly builderHandleSharePx = (this.builderHandleSizePx * 2) / 3;
   private readonly minPanelWidthPercent = 24;
+  private previewOverlaySyncId: number | null = null;
+  private boundPreviewFrameWindow: Window | null = null;
   private readonly defaultPanelWidths = {
     left: 33.333,
     center: 33.334,
@@ -111,6 +150,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
   readonly resolvedFieldAlignmentOptions = RESOLVED_FIELD_ALIGNMENT_OPTIONS;
   readonly labelAlignOptions = LABEL_ALIGN_OPTIONS;
   readonly resolvedLabelAlignOptions = RESOLVED_LABEL_ALIGN_OPTIONS;
+  readonly controlAlignOptions = CONTROL_ALIGN_OPTIONS;
   readonly verticalAlignOptions = VERTICAL_ALIGN_OPTIONS;
   readonly resolvedVerticalAlignOptions = RESOLVED_VERTICAL_ALIGN_OPTIONS;
   readonly pageOrientationOptions = PAGE_ORIENTATION_OPTIONS;
@@ -176,6 +216,47 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   themes: ThemePreset[] = [DEFAULT_THEME];
   savedTemplates: SavedTemplate[] = [];
+  previewOverlay: PreviewOverlayState | null = null;
+  activePreviewDrag: PreviewDragState | null = null;
+  private activePreviewDragHandle: HTMLElement | null = null;
+  private activePreviewPointerId: number | null = null;
+
+  private readonly onPreviewFrameViewportChange = (): void => {
+    this.ngZone.run(() => {
+      this.schedulePreviewOverlaySync();
+    });
+  };
+
+  private readonly onPreviewFrameClick = (event: MouseEvent): void => {
+    this.ngZone.run(() => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) {
+        return;
+      }
+
+      const blockElement = target.closest('[data-block-id]');
+      if (!(blockElement instanceof HTMLElement)) {
+        return;
+      }
+
+      const blockId = blockElement.dataset['blockId'];
+      if (!blockId) {
+        return;
+      }
+
+      this.selectBlock(blockId);
+
+      const pageElement = blockElement.closest('[data-page-number]');
+      if (pageElement instanceof HTMLElement) {
+        const pageNumber = Number(pageElement.dataset['pageNumber']);
+        if (Number.isFinite(pageNumber) && pageNumber > 0) {
+          this.selectedPreviewPageNumber = pageNumber;
+        }
+      }
+
+      this.schedulePreviewOverlaySync();
+    });
+  };
 
   ngOnInit(): void {
     this.loadAppThemeMode();
@@ -187,6 +268,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   ngAfterViewChecked(): void {
     this.syncPreviewFrameDocument();
+    this.schedulePreviewOverlaySync();
   }
 
   get activeTheme(): ThemePreset {
@@ -285,7 +367,8 @@ export class AppComponent implements OnInit, AfterViewChecked {
       formLayout: this.formLayout,
       pageSettings: this.pageSettings,
       pageOverrides: this.pageOverrides,
-      lockDesktopLayout: true
+      lockDesktopLayout: true,
+      includeEditorMetadata: true
     });
   }
 
@@ -300,7 +383,8 @@ export class AppComponent implements OnInit, AfterViewChecked {
       formLayout: this.formLayout,
       pageSettings: this.pageSettings,
       pageOverrides: this.pageOverrides,
-      lockDesktopLayout: true
+      lockDesktopLayout: true,
+      includeEditorMetadata: true
     });
   }
 
@@ -454,10 +538,23 @@ export class AppComponent implements OnInit, AfterViewChecked {
   closePreviewFocus(): void {
     this.isPreviewFocusOpen = false;
     this.lastPreviewFrameDocument = null;
+    this.previewOverlay = null;
+    this.stopPreviewDrag(true);
+    this.unbindPreviewFrameInteractions();
+  }
+
+  onPreviewFrameLoad(): void {
+    this.bindPreviewFrameInteractions();
+    this.schedulePreviewOverlaySync();
   }
 
   @HostListener('document:pointermove', ['$event'])
   onDocumentPointerMove(event: PointerEvent): void {
+    if (this.activePreviewDrag) {
+      this.updatePreviewDrag(event);
+      return;
+    }
+
     if (!this.activeResizeHandle) {
       return;
     }
@@ -479,6 +576,10 @@ export class AppComponent implements OnInit, AfterViewChecked {
   @HostListener('document:pointerup')
   @HostListener('window:blur')
   stopPanelResize(): void {
+    if (this.activePreviewDrag) {
+      this.stopPreviewDrag();
+    }
+
     if (!this.activeResizeHandle) {
       return;
     }
@@ -872,6 +973,133 @@ export class AppComponent implements OnInit, AfterViewChecked {
     block.labelWidth = this.normalizeNumber(value, block.labelWidth);
   }
 
+  updateSelectedFieldControlWidth(value: number | string): void {
+    const block = this.selectedFieldBlock;
+    if (!block) {
+      return;
+    }
+
+    block.controlWidth = normalizeNumberInRange(value, block.controlWidth, 50, 100);
+  }
+
+  selectPreviewField(blockId: string, pageNumber: number): void {
+    this.selectedPreviewPageNumber = pageNumber;
+    this.selectBlock(blockId);
+    this.schedulePreviewOverlaySync();
+  }
+
+  resolvePreviewLabelAlignValue(block: FieldBlock): PreviewSnapAlign {
+    if (block.labelAlign === 'center' || block.labelAlign === 'end') {
+      return block.labelAlign;
+    }
+
+    return this.formLayout.defaultLabelAlign;
+  }
+
+  setPreviewFieldLabelAlign(value: HorizontalAlign): void {
+    const block = this.selectedFieldBlock;
+    if (!block) {
+      return;
+    }
+
+    block.labelAlign = value;
+    this.lastPreviewFrameDocument = null;
+    this.schedulePreviewOverlaySync();
+  }
+
+  setPreviewFieldControlAlign(value: ControlAlign): void {
+    const block = this.selectedFieldBlock;
+    if (!block) {
+      return;
+    }
+
+    block.controlAlign = value;
+    this.lastPreviewFrameDocument = null;
+    this.schedulePreviewOverlaySync();
+  }
+
+  get hasPreviewOverlay(): boolean {
+    return Boolean(this.previewOverlay && this.selectedFieldBlock);
+  }
+
+  get hasPreviewLabelHandle(): boolean {
+    return this.hasPreviewOverlay && !this.selectedFieldBlock?.hideLabel;
+  }
+
+  get previewFieldOverlayStyles(): Record<string, string> {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return {};
+    }
+
+    return {
+      top: `${overlay.fieldTop}px`,
+      left: `${overlay.fieldLeft}px`,
+      width: `${overlay.fieldWidth}px`,
+      height: `${overlay.fieldHeight}px`
+    };
+  }
+
+  get previewLabelHandleStyles(): Record<string, string> {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return {};
+    }
+
+    return {
+      top: `${overlay.labelCellTop + Math.min(18, overlay.labelCellHeight / 2)}px`,
+      left: `${this.resolvePreviewLabelHandleCenterX()}px`
+    };
+  }
+
+  get previewControlHandleStyles(): Record<string, string> {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return {};
+    }
+
+    return {
+      top: `${overlay.controlShellTop + Math.min(18, overlay.controlShellHeight / 2)}px`,
+      left: `${this.resolvePreviewControlHandleCenterX()}px`
+    };
+  }
+
+  get previewDividerHandleStyles(): Record<string, string> {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return {};
+    }
+
+    return {
+      top: `${overlay.fieldTop + 8}px`,
+      left: `${this.resolvePreviewDividerX()}px`,
+      height: `${Math.max(36, overlay.fieldHeight - 16)}px`
+    };
+  }
+
+  startPreviewDrag(mode: PreviewDragMode, event: PointerEvent): void {
+    const block = this.selectedFieldBlock;
+    if (!block || !this.previewOverlay) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.activePreviewDrag = {
+      mode,
+      labelAlign: this.resolveCurrentLabelAlign(),
+      controlAlign: block.controlAlign,
+      labelWidth: block.labelWidth
+    };
+    this.activePreviewDragHandle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.activePreviewPointerId = event.pointerId;
+    this.activePreviewDragHandle?.setPointerCapture(event.pointerId);
+
+    document.body.style.cursor = mode === 'label-width' ? 'col-resize' : 'grabbing';
+    document.body.style.userSelect = 'none';
+  }
+
   getFieldByKey(fieldKey: string | null): JsonField | undefined {
     if (!fieldKey) {
       return undefined;
@@ -1028,7 +1256,9 @@ export class AppComponent implements OnInit, AfterViewChecked {
       alignmentMode: 'inherit',
       labelWidth: this.formLayout.defaultLabelWidth,
       labelAlign: 'inherit',
-      verticalAlign: 'inherit'
+      verticalAlign: 'inherit',
+      controlAlign: 'start',
+      controlWidth: 100
     };
   }
 
@@ -1055,7 +1285,9 @@ export class AppComponent implements OnInit, AfterViewChecked {
           alignmentMode: 'inherit',
           labelWidth: this.formLayout.defaultLabelWidth,
           labelAlign: 'inherit',
-          verticalAlign: 'inherit'
+          verticalAlign: 'inherit',
+          controlAlign: 'start',
+          controlWidth: 100
         };
       case 'section':
         return {
@@ -1475,6 +1707,264 @@ export class AppComponent implements OnInit, AfterViewChecked {
     this.lastPreviewFrameDocument = previewDocument;
   }
 
+  private bindPreviewFrameInteractions(): void {
+    const iframe = this.previewFocusFrame?.nativeElement;
+    const frameWindow = iframe?.contentWindow;
+    const frameDocument = iframe?.contentDocument;
+
+    if (!iframe || !frameWindow || !frameDocument || this.boundPreviewFrameWindow === frameWindow) {
+      return;
+    }
+
+    this.unbindPreviewFrameInteractions();
+    frameDocument.addEventListener('click', this.onPreviewFrameClick);
+    frameWindow.addEventListener('scroll', this.onPreviewFrameViewportChange, { passive: true });
+    frameWindow.addEventListener('resize', this.onPreviewFrameViewportChange);
+    this.boundPreviewFrameWindow = frameWindow;
+  }
+
+  private unbindPreviewFrameInteractions(): void {
+    const frameWindow = this.boundPreviewFrameWindow;
+    const frameDocument = frameWindow?.document;
+
+    frameDocument?.removeEventListener('click', this.onPreviewFrameClick);
+    frameWindow?.removeEventListener('scroll', this.onPreviewFrameViewportChange);
+    frameWindow?.removeEventListener('resize', this.onPreviewFrameViewportChange);
+    this.boundPreviewFrameWindow = null;
+  }
+
+  private schedulePreviewOverlaySync(): void {
+    if (this.previewOverlaySyncId !== null) {
+      window.cancelAnimationFrame(this.previewOverlaySyncId);
+    }
+
+    if (!this.isPreviewFocusOpen) {
+      this.previewOverlay = null;
+      this.previewOverlaySyncId = null;
+      return;
+    }
+
+    this.previewOverlaySyncId = window.requestAnimationFrame(() => {
+      this.previewOverlaySyncId = null;
+      this.updatePreviewOverlay();
+    });
+  }
+
+  private updatePreviewOverlay(): void {
+    const block = this.selectedFieldBlock;
+    const iframe = this.previewFocusFrame?.nativeElement;
+    const frameDocument = iframe?.contentDocument;
+
+    if (!block || !iframe || !frameDocument) {
+      this.previewOverlay = null;
+      return;
+    }
+
+    const blockElement = Array.from(frameDocument.querySelectorAll<HTMLElement>('[data-block-id]')).find(
+      (element) => element.dataset['blockId'] === block.id
+    );
+
+    if (!blockElement) {
+      this.previewOverlay = null;
+      return;
+    }
+
+    const labelCell = blockElement.querySelector<HTMLElement>('.field-label-cell');
+    const labelShell = blockElement.querySelector<HTMLElement>('.field-label-shell');
+    const controlCell = blockElement.querySelector<HTMLElement>('.field-control-cell');
+    const controlShell = blockElement.querySelector<HTMLElement>('.field-control-shell');
+
+    if (!labelCell || !controlCell || !controlShell) {
+      this.previewOverlay = null;
+      return;
+    }
+
+    const fieldRect = blockElement.getBoundingClientRect();
+    const labelCellRect = labelCell.getBoundingClientRect();
+    const controlCellRect = controlCell.getBoundingClientRect();
+    const controlShellRect = controlShell.getBoundingClientRect();
+    const labelShellWidth = labelShell?.getBoundingClientRect().width ?? Math.min(labelCellRect.width, 160);
+
+    if (fieldRect.bottom < 0 || fieldRect.top > iframe.clientHeight) {
+      this.previewOverlay = null;
+      return;
+    }
+
+    this.previewOverlay = {
+      fieldTop: fieldRect.top,
+      fieldLeft: fieldRect.left,
+      fieldWidth: fieldRect.width,
+      fieldHeight: fieldRect.height,
+      labelCellTop: labelCellRect.top,
+      labelCellLeft: labelCellRect.left,
+      labelCellWidth: labelCellRect.width,
+      labelCellHeight: labelCellRect.height,
+      labelShellWidth,
+      controlCellTop: controlCellRect.top,
+      controlCellLeft: controlCellRect.left,
+      controlCellWidth: controlCellRect.width,
+      controlCellHeight: controlCellRect.height,
+      controlShellTop: controlShellRect.top,
+      controlShellLeft: controlShellRect.left,
+      controlShellWidth: controlShellRect.width,
+      controlShellHeight: controlShellRect.height,
+      layoutMode: this.isInlineField(block) ? 'inline' : 'stacked'
+    };
+    this.cdr.detectChanges();
+  }
+
+  private updatePreviewDrag(event: PointerEvent): void {
+    const drag = this.activePreviewDrag;
+    const overlay = this.previewOverlay;
+    const iframeRect = this.previewFocusFrame?.nativeElement.getBoundingClientRect();
+    const block = this.selectedFieldBlock;
+
+    if (!drag || !overlay || !iframeRect || !block) {
+      return;
+    }
+
+    if (drag.mode === 'label-width') {
+      drag.labelWidth = normalizeNumberInRange(((event.clientX - (iframeRect.left + overlay.fieldLeft)) / overlay.fieldWidth) * 100, drag.labelWidth, 20, 48);
+    } else if (drag.mode === 'label-align') {
+      drag.labelAlign = this.resolveSnapAlign(event.clientX, iframeRect.left + overlay.labelCellLeft, overlay.labelCellWidth);
+    } else {
+      drag.controlAlign = this.resolveSnapAlign(event.clientX, iframeRect.left + overlay.controlCellLeft, overlay.controlCellWidth);
+    }
+
+    this.applyPreviewDragToLivePreview(drag);
+    this.updatePreviewOverlay();
+  }
+
+  private stopPreviewDrag(resetOnly = false): void {
+    const drag = this.activePreviewDrag;
+    const block = this.selectedFieldBlock;
+
+    if (!drag) {
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+      return;
+    }
+
+    if (!resetOnly && block) {
+      if (drag.mode === 'label-width') {
+        block.labelWidth = drag.labelWidth;
+      } else if (drag.mode === 'label-align') {
+        block.labelAlign = drag.labelAlign;
+      } else {
+        block.controlAlign = drag.controlAlign;
+      }
+    }
+
+    this.activePreviewDrag = null;
+    if (this.activePreviewDragHandle && this.activePreviewPointerId !== null && this.activePreviewDragHandle.hasPointerCapture(this.activePreviewPointerId)) {
+      this.activePreviewDragHandle.releasePointerCapture(this.activePreviewPointerId);
+    }
+    this.activePreviewDragHandle = null;
+    this.activePreviewPointerId = null;
+    document.body.style.removeProperty('cursor');
+    document.body.style.removeProperty('user-select');
+    this.lastPreviewFrameDocument = null;
+    this.schedulePreviewOverlaySync();
+  }
+
+  private resolveCurrentLabelAlign(): PreviewSnapAlign {
+    const labelAlign = this.selectedFieldBlock?.labelAlign;
+    if (labelAlign === 'center' || labelAlign === 'end') {
+      return labelAlign;
+    }
+
+    return this.formLayout.defaultLabelAlign;
+  }
+
+  private resolveSnapAlign(pointerX: number, left: number, width: number): PreviewSnapAlign {
+    const relative = width <= 0 ? 0 : (pointerX - left) / width;
+    if (relative <= 0.33) {
+      return 'start';
+    }
+    if (relative >= 0.66) {
+      return 'end';
+    }
+    return 'center';
+  }
+
+  private resolvePreviewLabelHandleCenterX(): number {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return 0;
+    }
+
+    const align = this.activePreviewDrag?.mode === 'label-align' ? this.activePreviewDrag.labelAlign : this.resolveCurrentLabelAlign();
+    return this.resolveAlignedCenter(overlay.labelCellLeft, overlay.labelCellWidth, overlay.labelShellWidth, align);
+  }
+
+  private resolvePreviewControlHandleCenterX(): number {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return 0;
+    }
+
+    const align = this.activePreviewDrag?.mode === 'control-align' ? this.activePreviewDrag.controlAlign : this.selectedFieldBlock?.controlAlign ?? 'start';
+    return this.resolveAlignedCenter(overlay.controlCellLeft, overlay.controlCellWidth, overlay.controlShellWidth, align);
+  }
+
+  private resolvePreviewDividerX(): number {
+    const overlay = this.previewOverlay;
+    if (!overlay) {
+      return 0;
+    }
+
+    const labelWidth = this.activePreviewDrag?.mode === 'label-width' ? this.activePreviewDrag.labelWidth : this.selectedFieldBlock?.labelWidth ?? this.formLayout.defaultLabelWidth;
+    return overlay.fieldLeft + (overlay.fieldWidth * labelWidth) / 100;
+  }
+
+  private resolveAlignedCenter(containerLeft: number, containerWidth: number, contentWidth: number, align: PreviewSnapAlign): number {
+    const freeSpace = Math.max(0, containerWidth - contentWidth);
+    const offset = align === 'center' ? freeSpace / 2 : align === 'end' ? freeSpace : 0;
+    return containerLeft + offset + contentWidth / 2;
+  }
+
+  private applyPreviewDragToLivePreview(drag: PreviewDragState): void {
+    const fieldElements = this.getSelectedPreviewFieldElements();
+    if (!fieldElements) {
+      return;
+    }
+
+    fieldElements.blockElement.style.setProperty('--field-label-width', `${drag.labelWidth}`);
+    fieldElements.blockElement.style.setProperty('--field-control-justify', drag.controlAlign);
+
+    if (fieldElements.labelCell) {
+      fieldElements.labelCell.classList.remove('start', 'center', 'end');
+      fieldElements.labelCell.classList.add(drag.labelAlign);
+    }
+  }
+
+  private getSelectedPreviewFieldElements(): {
+    blockElement: HTMLElement;
+    labelCell: HTMLElement | null;
+    controlShell: HTMLElement | null;
+  } | null {
+    const block = this.selectedFieldBlock;
+    const frameDocument = this.previewFocusFrame?.nativeElement.contentDocument;
+
+    if (!block || !frameDocument) {
+      return null;
+    }
+
+    const blockElement = Array.from(frameDocument.querySelectorAll<HTMLElement>('[data-block-id]')).find(
+      (element) => element.dataset['blockId'] === block.id
+    );
+
+    if (!blockElement) {
+      return null;
+    }
+
+    return {
+      blockElement,
+      labelCell: blockElement.querySelector<HTMLElement>('.field-label-cell'),
+      controlShell: blockElement.querySelector<HTMLElement>('.field-control-shell')
+    };
+  }
+
   private normalizeSavedTemplate(raw: unknown): SavedTemplate | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -1546,7 +2036,9 @@ export class AppComponent implements OnInit, AfterViewChecked {
         alignmentMode: this.normalizeFieldAlignmentMode(block.alignmentMode),
         labelWidth: normalizeNumberInRange(block.labelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth, 20, 48),
         labelAlign: this.normalizeHorizontalAlign(block.labelAlign),
-        verticalAlign: this.normalizeVerticalAlign(block.verticalAlign)
+        verticalAlign: this.normalizeVerticalAlign(block.verticalAlign),
+        controlAlign: this.normalizeControlAlign(block.controlAlign),
+        controlWidth: normalizeNumberInRange(block.controlWidth, 100, 50, 100)
       };
     }
 
@@ -1672,7 +2164,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
     return {
       defaultFieldLayout: layout.defaultFieldLayout === 'stacked' ? 'stacked' : 'inline',
       defaultLabelWidth: normalizeNumberInRange(layout.defaultLabelWidth, DEFAULT_FORM_LAYOUT.defaultLabelWidth, 20, 48),
-      defaultLabelAlign: layout.defaultLabelAlign === 'end' ? 'end' : 'start',
+      defaultLabelAlign: layout.defaultLabelAlign === 'center' ? 'center' : layout.defaultLabelAlign === 'end' ? 'end' : 'start',
       defaultVerticalAlign: layout.defaultVerticalAlign === 'start' ? 'start' : 'center',
       rowGap: normalizeCssLength(layout.rowGap, DEFAULT_FORM_LAYOUT.rowGap)
     };
@@ -1774,7 +2266,11 @@ export class AppComponent implements OnInit, AfterViewChecked {
   }
 
   private normalizeHorizontalAlign(value: unknown): HorizontalAlign {
-    return value === 'start' || value === 'end' ? value : 'inherit';
+    return value === 'start' || value === 'center' || value === 'end' ? value : 'inherit';
+  }
+
+  private normalizeControlAlign(value: unknown): ControlAlign {
+    return value === 'center' || value === 'end' ? value : 'start';
   }
 
   private normalizeVerticalAlign(value: unknown): VerticalAlign {

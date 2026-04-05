@@ -1368,6 +1368,15 @@
                   </label>
 
                   <label>
+                    <span class="field-label">Field box alignment</span>
+                    <select [(ngModel)]="block.controlAlign">
+                      @for (option of controlAlignOptions; track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
+                    </select>
+                  </label>
+
+                  <label>
                     <span class="field-label">Vertical alignment</span>
                     <select [(ngModel)]="block.verticalAlign">
                       @for (option of verticalAlignOptions; track option.value) {
@@ -1377,12 +1386,22 @@
                   </label>
 
                   <label class="full-span">
-                    <span class="field-label">Label width</span>
+                    <span class="field-label">Field box width</span>
                     <div class="range-control">
-                      <input type="range" min="20" max="48" step="1" [ngModel]="block.labelWidth" (ngModelChange)="updateSelectedFieldLabelWidth($event)" />
-                      <strong>{{ block.labelWidth }}%</strong>
+                      <input type="range" min="50" max="100" step="1" [ngModel]="block.controlWidth" (ngModelChange)="updateSelectedFieldControlWidth($event)" />
+                      <strong>{{ block.controlWidth }}%</strong>
                     </div>
                   </label>
+
+                  @if (isInlineField(block)) {
+                    <label class="full-span">
+                      <span class="field-label">Label width</span>
+                      <div class="range-control">
+                        <input type="range" min="20" max="48" step="1" [ngModel]="block.labelWidth" (ngModelChange)="updateSelectedFieldLabelWidth($event)" />
+                        <strong>{{ block.labelWidth }}%</strong>
+                      </div>
+                    </label>
+                  }
                 </div>
               </section>
             }
@@ -1711,37 +1730,71 @@
         </div>
       </div>
 
-      @if (selectedFieldBlock; as block) {
-        <div class="preview-toolbar">
-          <div>
-            <p class="toolbar-label">Quick alignment for {{ block.label }}</p>
-            <p class="toolbar-note">Adjust the selected field while the preview updates immediately.</p>
-          </div>
-
-          <div class="toolbar-grid">
-            <div class="pill-switch" role="group" aria-label="Quick field layout">
-              @for (option of fieldAlignmentOptions; track option.value) {
-                <button
-                  type="button"
-                  class="pill-button"
-                  [class.active]="block.alignmentMode === option.value"
-                  (click)="block.alignmentMode = option.value"
-                >
-                  {{ option.value === 'inherit' ? 'Global' : option.label }}
-                </button>
-              }
+      <div class="preview-toolbar preview-toolbar-docked">
+        @if (selectedFieldBlock; as block) {
+          <div class="preview-toolbar-copy">
+            <div>
+              <p class="toolbar-label">Adjust {{ block.label }}</p>
+              <p class="toolbar-note">Select a field from the left, then fine-tune its label and textbox alignment here.</p>
             </div>
 
-            <label>
-              <span class="field-label">Label width</span>
-              <div class="range-control">
-                <input type="range" min="20" max="48" step="1" [ngModel]="block.labelWidth" (ngModelChange)="updateSelectedFieldLabelWidth($event)" />
-                <strong>{{ block.labelWidth }}%</strong>
-              </div>
-            </label>
+            <span class="mini-tag">Page {{ getBlockPageNumber(block.id) ?? selectedPreviewPageNumber }}</span>
           </div>
-        </div>
-      }
+
+          <div class="toolbar-grid preview-toolbar-grid">
+            @if (!block.hideLabel) {
+              <div class="preview-toolbar-group">
+                <span class="preview-toolbar-group-label">Label align</span>
+                <div class="view-switch compact-switch" role="group" aria-label="Label alignment">
+                  @for (option of resolvedLabelAlignOptions; track option.value) {
+                    <button
+                      type="button"
+                      class="view-button compact-button"
+                      [class.active]="resolvePreviewLabelAlignValue(block) === option.value"
+                      (click)="setPreviewFieldLabelAlign(option.value)"
+                    >
+                      {{ option.label }}
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="preview-toolbar-group">
+              <span class="preview-toolbar-group-label">Textbox align</span>
+              <div class="view-switch compact-switch" role="group" aria-label="Textbox alignment">
+                @for (option of controlAlignOptions; track option.value) {
+                  <button
+                    type="button"
+                    class="view-button compact-button"
+                    [class.active]="block.controlAlign === option.value"
+                    (click)="setPreviewFieldControlAlign(option.value)"
+                  >
+                    {{ option.label }}
+                  </button>
+                }
+              </div>
+            </div>
+
+            @if (isInlineField(block)) {
+              <div class="preview-toolbar-group preview-toolbar-group-range">
+                <span class="preview-toolbar-group-label">Label width</span>
+                <div class="range-control">
+                  <input type="range" min="20" max="48" step="1" [ngModel]="block.labelWidth" (ngModelChange)="updateSelectedFieldLabelWidth($event)" />
+                  <strong>{{ block.labelWidth }}%</strong>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="preview-toolbar-copy">
+            <div>
+              <p class="toolbar-label">Field adjustments</p>
+              <p class="toolbar-note">Choose a field from the left-side list to update its preview alignment.</p>
+            </div>
+          </div>
+        }
+      </div>
 
       <div class="preview-dialog-body">
         <aside class="preview-dialog-sidebar">
@@ -1771,9 +1824,18 @@
                 <span>{{ page.blocks.length }} blocks</span>
               </div>
 
-              <div class="page-block-list">
+              <div class="page-block-list preview-field-list">
                 @for (block of page.blocks; track block.id) {
-                  <span class="tag">{{ getCanvasTitle(block) }}</span>
+                  @if (block.kind === 'field') {
+                    <button
+                      type="button"
+                      class="tag preview-field-tag"
+                      [class.active]="selectedBlockId === block.id"
+                      (click)="selectPreviewField(block.id, page.pageNumber)"
+                    >
+                      {{ getCanvasTitle(block) }}
+                    </button>
+                  }
                 }
               </div>
             </div>
@@ -1782,7 +1844,15 @@
 
         <div class="preview-dialog-stage">
           <div class="preview-frame-shell preview-frame-shell-focus">
-            <iframe #previewFocusFrame title="Live form preview" sandbox="" referrerpolicy="no-referrer"></iframe>
+            <div class="preview-frame-layer">
+              <iframe
+                #previewFocusFrame
+                title="Live form preview"
+                sandbox="allow-same-origin"
+                referrerpolicy="no-referrer"
+                (load)="onPreviewFrameLoad()"
+              ></iframe>
+            </div>
           </div>
         </div>
       </div>
