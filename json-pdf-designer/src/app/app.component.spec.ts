@@ -59,7 +59,7 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Compose accessible A4 forms with real page structure.');
+    expect(compiled.querySelector('h1')?.textContent).toContain('Thymeleaf Form Portal');
   });
 
   it('normalizes stored themes before loading them into the builder', () => {
@@ -141,15 +141,57 @@ describe('AppComponent', () => {
     expect(dialog!.getBoundingClientRect().top).toBeLessThan(40);
   });
 
-  it('keeps the primary preview and download actions pinned in a floating dock during editing', () => {
+  it('opens data setup from quick start and scrolls the setup panel into view', () => {
     const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
     fixture.detectChanges();
 
-    const compiled = fixture.nativeElement as HTMLElement;
-    const dock = compiled.querySelector('.floating-action-dock');
+    const scrollSpy = spyOn(app.settingsPanelAnchor!.nativeElement, 'scrollIntoView');
+    spyOn(window, 'requestAnimationFrame').and.callFake((callback: FrameRequestCallback): number => {
+      callback(0);
+      return 0;
+    });
 
-    expect(dock).toBeTruthy();
-    expect(dock?.textContent).toContain('Open Preview Studio');
-    expect(dock?.textContent).toContain('Download HTML');
+    app.setSettingsTab('data');
+
+    expect(app.settingsExpanded).toBeTrue();
+    expect(app.settingsTab).toBe('data');
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it('opens the palette panel from quick start and scrolls to the Add to form column', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const scrollSpy = spyOn(app.palettePanelAnchor!.nativeElement, 'scrollIntoView');
+    spyOn(window, 'requestAnimationFrame').and.callFake((callback: FrameRequestCallback): number => {
+      callback(0);
+      return 0;
+    });
+
+    app.openPaletteTab('fields');
+
+    expect(app.paletteTab).toBe('fields');
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it('opens the inspector from quick start and selects the first block when needed', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    app.selectedBlockId = null;
+    const scrollSpy = spyOn(app.editorPanelAnchor!.nativeElement, 'scrollIntoView');
+    spyOn(window, 'requestAnimationFrame').and.callFake((callback: FrameRequestCallback): number => {
+      callback(0);
+      return 0;
+    });
+
+    app.openInspectorPanel();
+
+    expect(app.sidePanelTab).toBe('inspector');
+    expect(app.selectedBlockId === (app.blocks[0]?.id ?? null)).toBeTrue();
+    expect(scrollSpy).toHaveBeenCalled();
   });
 });

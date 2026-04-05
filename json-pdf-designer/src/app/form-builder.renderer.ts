@@ -517,10 +517,17 @@ export function buildFormDocument({
       color: var(--text-color);
     }
 
+    .checkbox-control {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+
     .checkbox-row input,
-    .choice-option input {
+    .choice-option input,
+    .checkbox-control input {
       width: auto;
-      margin-top: 2px;
+      margin: 0;
     }
 
     .declaration-block {
@@ -878,14 +885,16 @@ function renderFieldBlock(
       : isTruthyPreviewValue(previewValue) || previewValue === 'true'
         ? ' checked'
         : '';
+    const checkboxLabelMarkup = block.hideLabel
+      ? `<span class="visually-hidden">${escapeHtml(block.label)}</span>`
+      : `<label class="${labelClass}" for="${fieldId}">${renderFieldLabelShell(block.label, block.required)}</label>`;
     return `<div class="${fieldClass}" ${layoutStyle}>
   <div class="field-row">
-    <div class="${labelClass}">${renderFieldMarker(block.required)}</div>
+    ${checkboxLabelMarkup}
     <div class="field-control-cell">
-      <label class="checkbox-row" for="${fieldId}">
+      <div class="checkbox-control">
         <input id="${fieldId}" name="${escapeAttribute(bindingKey)}" type="checkbox"${checkedAttribute}${block.required ? ' required aria-required="true"' : ''}${describedBy}${dataError} />
-        <span>${escapeHtml(block.label)}</span>
-      </label>
+      </div>
       ${helperMarkup}
     </div>
   </div>

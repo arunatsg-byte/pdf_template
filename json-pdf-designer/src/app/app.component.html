@@ -24,77 +24,147 @@
   [style.--heading-font]="activeTheme.headingFont"
   [style.--body-font]="activeTheme.bodyFont"
 >
-  <header class="hero">
-    <div class="hero-copy">
-      <p class="eyebrow">Angular 17 Page-Aware Thymeleaf Builder</p>
-      <h1>Compose accessible A4 forms with real page structure.</h1>
-      <p class="subtitle">
-        Build modern browser-printable Thymeleaf forms with per-page headers and footers, mixed field alignment, manual
-        page breaks, and a visual A4 preview.
-      </p>
-    </div>
-
-    <div class="hero-actions">
-      <div class="hero-controls">
-        <div class="control-group">
-          <span class="control-group-label">App Theme</span>
-          <div class="view-switch compact-switch" role="group" aria-label="Application theme">
-            @for (mode of appThemeModes; track mode.value) {
-              <button
-                type="button"
-                class="view-button compact-button"
-                [class.active]="appThemeMode === mode.value"
-                (click)="setAppThemeMode(mode.value)"
-              >
-                {{ mode.label }}
-              </button>
-            }
-          </div>
+  <header class="portal-header">
+    <div class="portal-topline">
+      <div class="portal-intro">
+        <div class="portal-title-row">
+          <p class="eyebrow">JSON to printable forms</p>
+          <span class="portal-badge">A4 + Thymeleaf</span>
         </div>
-
-        <div class="control-group">
-          <span class="control-group-label">Utility Panel</span>
-          <div class="view-switch compact-switch" role="tablist" aria-label="Workspace side panel">
-            @for (tab of sidePanelTabs; track tab.value) {
-              <button
-                type="button"
-                class="view-button compact-button"
-                [class.active]="sidePanelTab === tab.value"
-                (click)="setSidePanelTab(tab.value)"
-              >
-                {{ tab.label }}
-              </button>
-            }
-          </div>
+        <div class="portal-heading-line">
+          <h1>Thymeleaf Form Portal</h1>
+          <p class="portal-subtitle">Turn a flat JSON payload into a clean printable form with live page flow and export.</p>
         </div>
       </div>
 
-      <div class="hero-summary">
-        <div class="summary-card">
-          <strong>{{ pagePlan.length }}</strong>
-          <span>pages</span>
+      <div class="portal-theme">
+        <span class="control-group-label">App theme</span>
+        <div class="view-switch portal-theme-switch" role="group" aria-label="Application theme">
+          @for (mode of appThemeModes; track mode.value) {
+            <button
+              type="button"
+              class="view-button"
+              [class.active]="appThemeMode === mode.value"
+              (click)="setAppThemeMode(mode.value)"
+            >
+              {{ mode.label }}
+            </button>
+          }
         </div>
-        <div class="summary-card">
-          <strong>{{ blocks.length }}</strong>
-          <span>blocks</span>
-        </div>
-        <div class="summary-card">
+      </div>
+    </div>
+
+    <div class="portal-rail">
+      <div class="portal-current">
+        <span class="portal-current-label">Current form</span>
+        <strong>{{ templateName }}</strong>
+        <span>{{ layoutMode === 'two-column' ? 'Two-column layout' : 'Single-column layout' }}</span>
+      </div>
+
+      <div class="portal-stats">
+        <div class="portal-stat">
           <strong>{{ jsonFields.length }}</strong>
-          <span>json fields</span>
+          <span>Fields</span>
         </div>
+        <div class="portal-stat">
+          <strong>{{ blocks.length }}</strong>
+          <span>Blocks</span>
+        </div>
+        <div class="portal-stat">
+          <strong>{{ pagePlan.length }}</strong>
+          <span>Pages</span>
+        </div>
+      </div>
+
+      <div class="portal-actions">
+        <button type="button" class="secondary-button micro-button" (click)="isGettingStartedOpen ? hideGettingStarted() : showGettingStarted()">
+          {{ isGettingStartedOpen ? 'Hide guide' : 'Show guide' }}
+        </button>
+        <button type="button" class="secondary-button micro-button" (click)="setSettingsTab('data')">Data setup</button>
+        <button type="button" class="primary-button micro-button" (click)="openPreviewFocus()">Open preview</button>
       </div>
     </div>
   </header>
 
-  @if (!isPreviewFocusOpen) {
-    <div class="floating-action-dock" role="region" aria-label="Quick actions">
-      <span class="floating-action-label">Quick actions</span>
-      <button type="button" class="primary-button floating-action-button" (click)="openPreviewFocus()">Open Preview Studio</button>
-      <button type="button" class="secondary-button floating-action-button" (click)="downloadThymeleafHtml()">Download HTML</button>
-    </div>
+  @if (isGettingStartedOpen) {
+    <section class="start-strip" aria-labelledby="quick-start-title">
+      <div class="start-strip-header">
+        <div class="start-strip-copy">
+          <span id="quick-start-title" class="start-strip-title">Quick start</span>
+          <p>Move from payload to export in four short steps.</p>
+        </div>
+        <button type="button" class="secondary-button micro-button" (click)="hideGettingStarted()">Hide</button>
+      </div>
+
+      <div class="start-step-grid">
+        <article class="start-step">
+          <div class="start-step-heading">
+            <span class="start-step-number">1</span>
+            <div>
+              <h3>Load JSON</h3>
+              <p>Paste or upload a flat payload.</p>
+            </div>
+          </div>
+          <div class="start-step-footer">
+            <span class="guide-status" [class.ready]="jsonFields.length > 0">
+              {{ jsonFields.length > 0 ? jsonFields.length + ' fields ready' : 'No payload yet' }}
+            </span>
+            <button type="button" class="secondary-button micro-button" (click)="setSettingsTab('data')">Open</button>
+          </div>
+        </article>
+
+        <article class="start-step">
+          <div class="start-step-heading">
+            <span class="start-step-number">2</span>
+            <div>
+              <h3>Shape the flow</h3>
+              <p>Add fields, notes, and page breaks.</p>
+            </div>
+          </div>
+          <div class="start-step-footer">
+            <span class="guide-status" [class.ready]="blocks.length > 0">
+              {{ blocks.length > 0 ? blocks.length + ' blocks added' : 'Start with the first block' }}
+            </span>
+            <button type="button" class="secondary-button micro-button" (click)="openPaletteTab('fields')">Browse</button>
+          </div>
+        </article>
+
+        <article class="start-step">
+          <div class="start-step-heading">
+            <span class="start-step-number">3</span>
+            <div>
+              <h3>Edit details</h3>
+              <p>Refine labels, validation, and layout.</p>
+            </div>
+          </div>
+          <div class="start-step-footer">
+            <span class="guide-status" [class.ready]="selectedBlockId !== null">
+              {{ selectedBlockId ? 'Block selected' : 'Select a card to edit' }}
+            </span>
+            <button type="button" class="secondary-button micro-button" (click)="openInspectorPanel()">Edit</button>
+          </div>
+        </article>
+
+        <article class="start-step">
+          <div class="start-step-heading">
+            <span class="start-step-number">4</span>
+            <div>
+              <h3>Preview & export</h3>
+              <p>Check page flow and download HTML.</p>
+            </div>
+          </div>
+          <div class="start-step-footer">
+            <span class="guide-status" [class.ready]="pagePlan.length > 0">
+              {{ pagePlan.length }} page{{ pagePlan.length === 1 ? '' : 's' }} planned
+            </span>
+            <button type="button" class="primary-button micro-button" (click)="openPreviewFocus()">Preview</button>
+          </div>
+        </article>
+      </div>
+    </section>
   }
 
-  <section class="settings-tabbar" aria-label="Workspace settings tabs">
+  <section #settingsPanelAnchor class="settings-tabbar" aria-label="Workspace settings tabs">
     <div class="settings-overview">
       <div class="settings-overview-copy">
         <div class="view-switch settings-switch" role="tablist" aria-label="Workspace settings">
@@ -123,7 +193,7 @@
     </div>
 
     @if (!settingsExpanded) {
-      <p class="collapsed-helper">Setup panels are hidden so the builder stays focused. Choose a tab above whenever you need JSON, layout, theme, or library settings.</p>
+      <p class="collapsed-helper">The setup area is tucked away so the workspace stays calm. Open any tab above when you need data, layout, theme, or library tools.</p>
     }
   </section>
 
@@ -811,11 +881,11 @@
 
   <p class="status" role="status" aria-live="polite">{{ statusMessage }}</p>
 
-  <section class="builder-grid" aria-label="Designer workspace">
-    <article class="panel palette-panel">
+  <section #builderWorkspace id="builder-workspace" class="builder-grid" aria-label="Designer workspace">
+    <article #palettePanelAnchor class="panel workspace-panel palette-panel" [style.flex-basis]="leftPanelBasis">
       <div class="panel-header">
         <div>
-          <h2>Palette</h2>
+          <h2>Add to form</h2>
           <p>{{ activePaletteTabDescription }}</p>
         </div>
       </div>
@@ -837,7 +907,7 @@
         @if (paletteTab === 'fields') {
           <section class="palette-column" aria-labelledby="json-fields-heading">
             <div class="subsection-header compact-subsection-header">
-              <h3 id="json-fields-heading">JSON Fields</h3>
+              <h3 id="json-fields-heading">Payload fields</h3>
               <span>{{ jsonFields.length }} available</span>
             </div>
 
@@ -858,7 +928,7 @@
                 }
               </div>
             } @else {
-              <p class="empty-state">Load flat JSON to generate field rows here.</p>
+              <p class="empty-state">Open Data Setup to load a flat JSON payload and generate draggable fields here.</p>
             }
           </section>
         }
@@ -866,7 +936,7 @@
         @if (paletteTab === 'blocks') {
           <section class="palette-column manual-column" aria-labelledby="manual-blocks-heading">
             <div class="subsection-header compact-subsection-header">
-              <h3 id="manual-blocks-heading">Manual Blocks</h3>
+              <h3 id="manual-blocks-heading">Content blocks</h3>
               <span>{{ manualBlocks.length }} types</span>
             </div>
 
@@ -895,13 +965,13 @@
         @if (paletteTab === 'pages') {
           <section class="palette-column" aria-labelledby="pages-heading">
             <div class="subsection-header compact-subsection-header">
-              <h3 id="pages-heading">Pages</h3>
+              <h3 id="pages-heading">Page plan</h3>
               <span>{{ pagePlan.length }} in document</span>
             </div>
 
             <div class="action-row compact page-toolbar">
               <button type="button" class="secondary-button" (click)="addManualBlock('page-break')">Insert page break</button>
-              <button type="button" class="secondary-button" (click)="openPreviewFocus()">Open preview studio</button>
+              <button type="button" class="secondary-button" (click)="openPreviewFocus()">Open preview</button>
             </div>
 
             <div class="compact-page-list">
@@ -931,11 +1001,21 @@
       </div>
     </article>
 
-    <article class="panel canvas-panel">
+    <button
+      type="button"
+      class="panel-resize-handle"
+      aria-label="Resize Add to form and Form flow panels"
+      title="Drag to resize columns. Double-click to reset."
+      (pointerdown)="startPanelResize('left-center', $event)"
+      (keydown)="onResizeHandleKeydown('left-center', $event)"
+      (dblclick)="resetPanelWidths()"
+    ></button>
+
+    <article class="panel workspace-panel canvas-panel" [style.flex-basis]="centerPanelBasis">
       <div class="panel-header">
         <div>
-          <h2>Canvas</h2>
-          <p>Keep the main editing surface wide, reorder blocks, and shape the printed document page by page.</p>
+          <h2>Form flow</h2>
+          <p>This is the final document outline. Reorder cards, insert page breaks, and shape how the printed form reads.</p>
         </div>
       </div>
 
@@ -971,11 +1051,52 @@
                       </div>
                     </div>
 
-                    <div class="action-row compact design-card-actions">
-                      <button type="button" class="icon-button" (click)="moveBlock(block.id, -1)" aria-label="Move block up">↑</button>
-                      <button type="button" class="icon-button" (click)="moveBlock(block.id, 1)" aria-label="Move block down">↓</button>
-                      <button type="button" class="icon-button" (click)="duplicateBlock(block.id)" aria-label="Duplicate block">⧉</button>
-                      <button type="button" class="icon-button" (click)="removeBlock(block.id)" aria-label="Remove block">✕</button>
+                    <div class="action-row compact design-card-actions" role="toolbar" aria-label="Block actions">
+                      <button
+                        type="button"
+                        class="icon-button card-action-button"
+                        (click)="moveBlock(block.id, -1); $event.stopPropagation()"
+                        aria-label="Move block up"
+                        title="Move up"
+                      >
+                        <svg class="card-action-icon" viewBox="0 0 16 16" aria-hidden="true">
+                          <path d="M8 13V3M8 3 4.75 6.25M8 3l3.25 3.25" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-button card-action-button"
+                        (click)="moveBlock(block.id, 1); $event.stopPropagation()"
+                        aria-label="Move block down"
+                        title="Move down"
+                      >
+                        <svg class="card-action-icon" viewBox="0 0 16 16" aria-hidden="true">
+                          <path d="M8 3v10M8 13l-3.25-3.25M8 13l3.25-3.25" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-button card-action-button"
+                        (click)="duplicateBlock(block.id); $event.stopPropagation()"
+                        aria-label="Duplicate block"
+                        title="Duplicate"
+                      >
+                        <svg class="card-action-icon" viewBox="0 0 16 16" aria-hidden="true">
+                          <rect x="5.25" y="5.25" width="7" height="7" rx="1.5" />
+                          <path d="M3.75 9.5V4.75c0-.55.45-1 1-1H9.5" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-button card-action-button card-action-button--danger"
+                        (click)="removeBlock(block.id); $event.stopPropagation()"
+                        aria-label="Remove block"
+                        title="Delete"
+                      >
+                        <svg class="card-action-icon" viewBox="0 0 16 16" aria-hidden="true">
+                          <path d="m5 5 6 6M11 5l-6 6" />
+                        </svg>
+                      </button>
                     </div>
 
                     @if (block.kind === 'field') {
@@ -1033,18 +1154,32 @@
           </div>
         } @else {
           <div class="empty-canvas">
-            <h3>Start the form by adding blocks</h3>
-            <p>Load JSON fields, add manual content, and insert page breaks to shape the printed document.</p>
+            <h3>Start building the first page</h3>
+            <p>Choose a payload field or content block from the left, then drop it into this form flow.</p>
+            <div class="empty-canvas-actions">
+              <button type="button" class="secondary-button" (click)="setPaletteTab('fields')">Browse fields</button>
+              <button type="button" class="secondary-button" (click)="setPaletteTab('blocks')">Browse content</button>
+            </div>
           </div>
         }
       </div>
     </article>
 
-    <article class="panel side-panel">
+    <button
+      type="button"
+      class="panel-resize-handle"
+      aria-label="Resize Form flow and Edit and export panels"
+      title="Drag to resize columns. Double-click to reset."
+      (pointerdown)="startPanelResize('center-right', $event)"
+      (keydown)="onResizeHandleKeydown('center-right', $event)"
+      (dblclick)="resetPanelWidths()"
+    ></button>
+
+    <article #editorPanelAnchor class="panel workspace-panel side-panel" [style.flex-basis]="rightPanelBasis">
       <div class="panel-header">
         <div>
-          <h2>Inspector / Output</h2>
-          <p>Keep block editing and generated Thymeleaf markup beside the canvas while preview opens larger in its own studio.</p>
+          <h2>Edit & export</h2>
+          <p>Select a card to edit its content and layout, or switch to HTML when you are ready to export.</p>
         </div>
       </div>
 
@@ -1065,9 +1200,39 @@
         @if (sidePanelTab === 'html') {
           <section class="side-panel-section side-panel-code">
             <div class="subsection-header">
-              <h3>Generated Thymeleaf HTML</h3>
-              <div class="action-row compact">
-                <button type="button" class="secondary-button" (click)="copyThymeleafHtml()">Copy</button>
+              <div>
+                <h3>Generated Thymeleaf HTML</h3>
+                <p
+                  class="code-copy-feedback"
+                  [class.is-visible]="thymeleafCopyState !== 'idle'"
+                  [class.is-error]="thymeleafCopyState === 'error'"
+                  aria-live="polite"
+                >
+                  {{
+                    thymeleafCopyState === 'copied'
+                      ? 'Copied to clipboard'
+                      : thymeleafCopyState === 'error'
+                        ? 'Copy failed. Try again or copy from the textarea.'
+                        : ' '
+                  }}
+                </p>
+              </div>
+              <div class="action-row compact code-actions">
+                <button
+                  type="button"
+                  class="secondary-button code-copy-button"
+                  [class.is-copied]="thymeleafCopyState === 'copied'"
+                  [class.is-error]="thymeleafCopyState === 'error'"
+                  (click)="copyThymeleafHtml()"
+                >
+                  {{
+                    thymeleafCopyState === 'copied'
+                      ? 'Copied'
+                      : thymeleafCopyState === 'error'
+                        ? 'Retry copy'
+                        : 'Copy HTML'
+                  }}
+                </button>
                 <button type="button" class="secondary-button" (click)="downloadThymeleafHtml()">Download</button>
               </div>
             </div>

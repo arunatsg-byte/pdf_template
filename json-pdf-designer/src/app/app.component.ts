@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewChecked, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { AfterViewChecked, Component, ElementRef, HostListener, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { buildFormDocument, buildPagePlan, PlannedPage } from './form-builder.renderer';
@@ -66,6 +66,8 @@ type PreviewMode = 'sample' | 'export';
 type InspectorTab = 'content' | 'layout' | 'validation' | 'accessibility';
 type AppThemeMode = 'light' | 'dark' | 'system';
 type SidePanelTab = 'inspector' | 'html';
+type ResizeHandle = 'left-center' | 'center-right';
+type CopyFeedbackState = 'idle' | 'copied' | 'error';
 
 @Component({
   selector: 'app-root',
@@ -76,12 +78,28 @@ type SidePanelTab = 'inspector' | 'html';
 })
 export class AppComponent implements OnInit, AfterViewChecked {
   @ViewChild('previewFocusFrame') previewFocusFrame?: ElementRef<HTMLIFrameElement>;
+  @ViewChild('builderWorkspace') builderWorkspace?: ElementRef<HTMLElement>;
+  @ViewChild('settingsPanelAnchor') settingsPanelAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('palettePanelAnchor') palettePanelAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('editorPanelAnchor') editorPanelAnchor?: ElementRef<HTMLElement>;
 
   private lastPreviewFrameDocument: string | null = null;
+  private readonly builderHandleSizePx = 18;
+  private readonly builderHandleSharePx = (this.builderHandleSizePx * 2) / 3;
+  private readonly minPanelWidthPercent = 24;
+  private readonly defaultPanelWidths = {
+    left: 33.333,
+    center: 33.334,
+    right: 33.333
+  };
+  private thymeleafCopyFeedbackResetId: number | null = null;
+  private resizeStartX = 0;
+  private resizeStartWidths = { ...this.defaultPanelWidths };
 
   readonly storageThemeKey = 'json-pdf-designer-themes';
   readonly storageTemplateKey = 'json-pdf-designer-templates';
   readonly storageAppThemeKey = 'json-pdf-designer-app-theme';
+  readonly storageGuideStateKey = 'json-pdf-designer-guide-state';
 
   readonly sampleJson = SAMPLE_JSON;
   readonly fontChoices = FONT_CHOICES;
@@ -98,15 +116,15 @@ export class AppComponent implements OnInit, AfterViewChecked {
   readonly pageOrientationOptions = PAGE_ORIENTATION_OPTIONS;
   readonly pageRegionAlignOptions = PAGE_REGION_ALIGN_OPTIONS;
   readonly settingsTabs: Array<{ value: SettingsTab; label: string; description: string }> = [
-    { value: 'data', label: 'Data', description: 'JSON input and template basics' },
-    { value: 'layout', label: 'Layout', description: 'Pages, alignment, and pagination' },
-    { value: 'theme', label: 'Theme', description: 'Document color and typography controls' },
-    { value: 'library', label: 'Library', description: 'Save, export, and template reuse' }
+    { value: 'data', label: 'Data', description: 'Paste or upload a flat JSON payload and name the form.' },
+    { value: 'layout', label: 'Layout', description: 'Tune page flow, spacing, headers, footers, and pagination.' },
+    { value: 'theme', label: 'Theme', description: 'Shape the look and feel of the final document.' },
+    { value: 'library', label: 'Library', description: 'Save reusable templates, import themes, and export HTML.' }
   ];
   readonly paletteTabs: Array<{ value: PaletteTab; label: string; description: string }> = [
-    { value: 'fields', label: 'Fields', description: 'Payload fields loaded from the flat JSON source.' },
-    { value: 'blocks', label: 'Blocks', description: 'Manual sections, notes, links, and page structure blocks.' },
-    { value: 'pages', label: 'Pages', description: 'Page order, page breaks, and page-level context.' }
+    { value: 'fields', label: 'Fields', description: 'Bring payload fields into the form after loading JSON.' },
+    { value: 'blocks', label: 'Content', description: 'Add headings, notes, dividers, custom inputs, and helpful copy.' },
+    { value: 'pages', label: 'Pages', description: 'Review the page plan and place manual breaks when needed.' }
   ];
   readonly previewModes: Array<{ value: PreviewMode; label: string }> = [
     { value: 'sample', label: 'Sample Data' },
@@ -124,7 +142,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
     { value: 'system', label: 'System' }
   ];
   readonly sidePanelTabs: Array<{ value: SidePanelTab; label: string }> = [
-    { value: 'inspector', label: 'Inspector' },
+    { value: 'inspector', label: 'Edit' },
     { value: 'html', label: 'HTML' }
   ];
 
@@ -136,6 +154,9 @@ export class AppComponent implements OnInit, AfterViewChecked {
   sidePanelTab: SidePanelTab = 'inspector';
   settingsExpanded = false;
   isPreviewFocusOpen = false;
+  isGettingStartedOpen = true;
+  activeResizeHandle: ResizeHandle | null = null;
+  thymeleafCopyState: CopyFeedbackState = 'idle';
   jsonInput = SAMPLE_JSON;
   templateName = 'Accessible Application Form';
   layoutMode: LayoutMode = 'two-column';
@@ -145,18 +166,20 @@ export class AppComponent implements OnInit, AfterViewChecked {
   pageOverrides: PageOverride[] = [];
   selectedThemeId = DEFAULT_THEME.id;
   selectedPreviewPageNumber = 1;
-  statusMessage = 'Ready. Load flat JSON, arrange fields into A4 pages, and generate ADA-conscious Thymeleaf HTML.';
+  statusMessage = 'Ready. Start with the sample payload or open Data Setup to load your own flat JSON.';
 
   jsonFields: JsonField[] = [];
   blocks: BuilderBlock[] = [];
   selectedBlockId: string | null = null;
   dragItem: DragItem = null;
+  panelWidths = { ...this.defaultPanelWidths };
 
   themes: ThemePreset[] = [DEFAULT_THEME];
   savedTemplates: SavedTemplate[] = [];
 
   ngOnInit(): void {
     this.loadAppThemeMode();
+    this.loadGuideState();
     this.loadSavedThemes();
     this.loadSavedTemplates();
     this.resetWorkspace();
@@ -287,8 +310,8 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   get previewModeDescription(): string {
     return this.previewMode === 'export'
-      ? 'Locked to the desktop page layout so the in-app preview tracks the downloaded browser-print HTML.'
-      : 'Uses the same page structure while filling fields with sample JSON values for faster visual editing.';
+      ? 'Shows the locked browser-print layout so you can compare the downloaded HTML before export.'
+      : 'Uses the same page structure with sample values so you can design the form faster.';
   }
 
   get activeSettingsTabDescription(): string {
@@ -314,13 +337,31 @@ export class AppComponent implements OnInit, AfterViewChecked {
     });
   }
 
+  get leftPanelBasis(): string {
+    return this.formatPanelBasis(this.panelWidths.left);
+  }
+
+  get centerPanelBasis(): string {
+    return this.formatPanelBasis(this.panelWidths.center);
+  }
+
+  get rightPanelBasis(): string {
+    return this.formatPanelBasis(this.panelWidths.right);
+  }
+
   setSettingsTab(tab: SettingsTab): void {
     this.settingsTab = tab;
     this.settingsExpanded = true;
+    this.scrollPanelIntoView(this.settingsPanelAnchor);
   }
 
   setPaletteTab(tab: PaletteTab): void {
     this.paletteTab = tab;
+  }
+
+  openPaletteTab(tab: PaletteTab): void {
+    this.paletteTab = tab;
+    this.scrollPanelIntoView(this.palettePanelAnchor);
   }
 
   setPreviewMode(mode: PreviewMode): void {
@@ -338,6 +379,62 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   setSidePanelTab(tab: SidePanelTab): void {
     this.sidePanelTab = tab;
+  }
+
+  openInspectorPanel(): void {
+    if (!this.selectedBlockId && this.blocks.length) {
+      this.selectedBlockId = this.blocks[0]?.id ?? null;
+    }
+
+    this.sidePanelTab = 'inspector';
+    this.scrollPanelIntoView(this.editorPanelAnchor);
+  }
+
+  showGettingStarted(): void {
+    this.isGettingStartedOpen = true;
+    localStorage.setItem(this.storageGuideStateKey, 'open');
+  }
+
+  hideGettingStarted(): void {
+    this.isGettingStartedOpen = false;
+    localStorage.setItem(this.storageGuideStateKey, 'closed');
+  }
+
+  startPanelResize(handle: ResizeHandle, event: PointerEvent): void {
+    if (!this.isDesktopWorkspace()) {
+      return;
+    }
+
+    const workspace = this.builderWorkspace?.nativeElement;
+    if (!workspace) {
+      return;
+    }
+
+    event.preventDefault();
+    this.activeResizeHandle = handle;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidths = { ...this.panelWidths };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    workspace.classList.add('is-resizing-panels');
+  }
+
+  onResizeHandleKeydown(handle: ResizeHandle, event: KeyboardEvent): void {
+    if (!this.isDesktopWorkspace()) {
+      return;
+    }
+
+    const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (!direction) {
+      return;
+    }
+
+    event.preventDefault();
+    this.resizePanels(handle, direction * (event.shiftKey ? 4 : 2));
+  }
+
+  resetPanelWidths(): void {
+    this.panelWidths = { ...this.defaultPanelWidths };
   }
 
   collapseSettingsPanel(): void {
@@ -359,6 +456,39 @@ export class AppComponent implements OnInit, AfterViewChecked {
     this.lastPreviewFrameDocument = null;
   }
 
+  @HostListener('document:pointermove', ['$event'])
+  onDocumentPointerMove(event: PointerEvent): void {
+    if (!this.activeResizeHandle) {
+      return;
+    }
+
+    const workspace = this.builderWorkspace?.nativeElement;
+    if (!workspace) {
+      return;
+    }
+
+    const availableWidth = workspace.getBoundingClientRect().width - this.builderHandleSizePx * 2;
+    if (availableWidth <= 0) {
+      return;
+    }
+
+    const deltaPercent = ((event.clientX - this.resizeStartX) / availableWidth) * 100;
+    this.resizePanels(this.activeResizeHandle, deltaPercent, true);
+  }
+
+  @HostListener('document:pointerup')
+  @HostListener('window:blur')
+  stopPanelResize(): void {
+    if (!this.activeResizeHandle) {
+      return;
+    }
+
+    this.activeResizeHandle = null;
+    this.builderWorkspace?.nativeElement.classList.remove('is-resizing-panels');
+    document.body.style.removeProperty('cursor');
+    document.body.style.removeProperty('user-select');
+  }
+
   parseJsonInput(): void {
     try {
       const parsed = JSON.parse(this.jsonInput) as unknown;
@@ -367,7 +497,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
       if (!this.jsonFields.length) {
         this.blocks = [];
         this.selectedBlockId = null;
-        this.statusMessage = 'The JSON loaded successfully, but no primitive fields were found.';
+        this.statusMessage = 'The JSON loaded, but this builder only found non-primitive values. Try a flat object with text, number, or boolean fields.';
         return;
       }
 
@@ -387,10 +517,10 @@ export class AppComponent implements OnInit, AfterViewChecked {
       this.selectedBlockId = this.blocks[0]?.id ?? null;
       this.syncSelectedPreviewPage();
       this.settingsExpanded = false;
-      this.statusMessage = `Loaded ${this.jsonFields.length} fields into the palette. Arrange them across pages or insert page breaks as needed.`;
+      this.statusMessage = `Loaded ${this.jsonFields.length} fields. Start dragging them into the form flow and add sections where the document needs structure.`;
     } catch (error) {
       this.statusMessage =
-        error instanceof Error ? error.message : 'The JSON could not be parsed. Please provide valid flat JSON and try again.';
+        error instanceof Error ? error.message : 'The JSON could not be parsed. Please provide a valid flat JSON object and try again.';
     }
   }
 
@@ -638,12 +768,15 @@ export class AppComponent implements OnInit, AfterViewChecked {
         this.copyTextWithFallback(this.thymeleafMarkup);
       }
 
+      this.setThymeleafCopyState('copied');
       this.statusMessage = 'The Thymeleaf HTML was copied to the clipboard.';
     } catch {
       try {
         this.copyTextWithFallback(this.thymeleafMarkup);
+        this.setThymeleafCopyState('copied');
         this.statusMessage = 'The Thymeleaf HTML was copied to the clipboard.';
       } catch {
+        this.setThymeleafCopyState('error');
         this.statusMessage = 'Copy failed in this browser. Please use the textarea and copy manually.';
       }
     }
@@ -1196,6 +1329,76 @@ export class AppComponent implements OnInit, AfterViewChecked {
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       this.appThemeMode = stored;
     }
+  }
+
+  private loadGuideState(): void {
+    const stored = localStorage.getItem(this.storageGuideStateKey);
+    if (stored === 'open' || stored === 'closed') {
+      this.isGettingStartedOpen = stored === 'open';
+    }
+  }
+
+  private formatPanelBasis(percent: number): string {
+    return `calc(${percent.toFixed(3)}% - ${this.builderHandleSharePx.toFixed(3)}px)`;
+  }
+
+  private scrollPanelIntoView(panel?: ElementRef<HTMLElement>): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel?.nativeElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      });
+    });
+  }
+
+  private setThymeleafCopyState(state: CopyFeedbackState): void {
+    if (this.thymeleafCopyFeedbackResetId !== null) {
+      window.clearTimeout(this.thymeleafCopyFeedbackResetId);
+    }
+
+    this.thymeleafCopyState = state;
+    if (state === 'idle') {
+      this.thymeleafCopyFeedbackResetId = null;
+      return;
+    }
+
+    this.thymeleafCopyFeedbackResetId = window.setTimeout(() => {
+      this.thymeleafCopyState = 'idle';
+      this.thymeleafCopyFeedbackResetId = null;
+    }, state === 'copied' ? 1800 : 2600);
+  }
+
+  private isDesktopWorkspace(): boolean {
+    return window.innerWidth > 1180;
+  }
+
+  private resizePanels(handle: ResizeHandle, deltaPercent: number, fromPointer = false): void {
+    const nextWidths = fromPointer ? { ...this.resizeStartWidths } : { ...this.panelWidths };
+
+    if (handle === 'left-center') {
+      const total = nextWidths.left + nextWidths.center;
+      const left = this.clamp(nextWidths.left + deltaPercent, this.minPanelWidthPercent, total - this.minPanelWidthPercent);
+      this.panelWidths = {
+        left,
+        center: total - left,
+        right: nextWidths.right
+      };
+      return;
+    }
+
+    const total = nextWidths.center + nextWidths.right;
+    const center = this.clamp(nextWidths.center + deltaPercent, this.minPanelWidthPercent, total - this.minPanelWidthPercent);
+    this.panelWidths = {
+      left: nextWidths.left,
+      center,
+      right: total - center
+    };
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
   }
 
   private downloadFile(filename: string, content: string, contentType: string): void {
