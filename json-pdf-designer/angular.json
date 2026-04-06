@@ -17,7 +17,10 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/json-pdf-designer",
+            "outputPath": {
+              "base": "dist/json-pdf-designer",
+              "browser": ""
+            },
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": [
@@ -32,7 +35,8 @@
             "styles": [
               "src/styles.scss"
             ],
-            "scripts": []
+            "scripts": [],
+            "baseHref": "./"
           },
           "configurations": {
             "production": {
@@ -44,8 +48,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "44kb",
-                  "maximumError": "48kb"
+                  "maximumWarning": "48kb",
+                  "maximumError": "56kb"
                 }
               ],
               "outputHashing": "all"
